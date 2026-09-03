@@ -1,0 +1,30 @@
+# Konfiguracja z sekretami - nigdy nie commitować
+config.yaml
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Wirtualne środowiska
+.venv/
+venv/
+env/
+
+# Docker
+*.log
+
+# Edytory / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System
+.DS_Store
+Thumbs.db

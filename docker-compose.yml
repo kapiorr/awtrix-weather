@@ -1,0 +1,16 @@
+services:
+  awtrix-weather:
+    build: .
+    container_name: awtrix-weather
+    restart: unless-stopped
+    environment:
+      TZ: "Europe/Warsaw"
+      LOG_LEVEL: "INFO"   # zmień na "DEBUG" (i zrestartuj: docker compose up -d) dla logów jak przy -v
+      # Sekrety - opcjonalnie zamiast trzymać je w config.yaml:
+      # OWM_API_KEY: ""
+      # MQTT_HOST: "127.0.0.1"
+      # MQTT_PORT: "1883"
+      # MQTT_USERNAME: ""
+      # MQTT_PASSWORD: ""
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro

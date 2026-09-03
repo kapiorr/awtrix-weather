@@ -1,0 +1,106 @@
+# Skopiuj do config.yaml i uzupełnij.
+# Sekrety (klucz OpenWeatherMap, hasło MQTT) możesz też podać przez zmienne
+# środowiskowe - patrz README.md.
+
+location:
+  latitude: 52.2297
+  longitude: 21.0122
+  elevation: 100          # metry n.p.m. (opcjonalnie, poprawia dokładność wschodu/zachodu)
+  timezone: "Europe/Warsaw"  # IANA tz, używane do wyświetlania lokalnej godziny wschodu/zachodu
+
+weather:
+  provider: "open-meteo"   # open-meteo (domyślny, bez klucza) | openweathermap (One Call 3.0, wymaga
+                            # aktywnej subskrypcji na koncie OWM) | openweathermap-free (klasyczne
+                            # darmowe endpointy /data/2.5, bez subskrypcji, ale prognoza co 3h)
+  openweathermap_api_key: ""  # tylko gdy provider zaczyna się od openweathermap
+  units: "metric"           # metric (°C) | imperial (°F)
+  refresh_seconds: 900       # jak często realnie pytać API pogodowe (sek.) - między tym cache; pętla i tak chodzi co poll_interval_seconds
+
+  metar_override:
+    enabled: false            # jeśli true - temperatura i ciśnienie brane z prawdziwego pomiaru METAR zamiast z powyższego providera (ikona/prognoza zostają z providera)
+    station: "EPWA"            # kod ICAO stacji
+    avwx_api_key: ""            # klucz z avwx.rest, albo zmienna środowiskowa AVWX_API_KEY
+    refresh_seconds: 900         # osobny interwał od weather.refresh_seconds powyżej
+  hours_to_show: 12         # 0-24, ile godzin prognozy na dole wyświetlacza
+  temp_digits: 0            # 0-2, miejsca po przecinku
+  temp_suffix: "°"          # "", "°", "°F", "°C", "F", "C"
+  color_matrix:
+    # domyślnie skala Celsjusza (EURO, wzorowana na NOAA); dla Fahrenheita patrz README
+    "-12": "#D977DF"
+    "-6": "#9545BC"
+    "-1": "#4B379C"
+    "0": "#FEC4FF"
+    "4": "#31B8DB"
+    "10": "#31DB8B"
+    "15": "#6ED228"
+    "21": "#FFFF28"
+    "27": "#F87E27"
+    "32": "#CF3927"
+    "38": "#A12527"
+  icons:
+    clear-night: "w-clear-night"
+    cloudy: "w-cloudy"
+    exceptional: "w-exceptional"
+    fog: "w-fog"
+    hail: "w-hail"
+    lightning: "w-lightning"
+    lightning-rainy: "w-lightning-rainy"
+    partlycloudy: "w-partlycloudy"
+    pouring: "w-pouring"
+    rainy: "w-rainy"
+    snowy: "w-snowy"
+    snowy-rainy: "w-snowy-rainy"
+    sunny: "w-sunny"
+    windy: "w-windy"
+    windy-variant: "w-windy-variant"
+    sunrise: "w-sunrise"
+    sunset: "w-sunset"
+  show_overlay: true
+  message_duration_forecast: 30   # sekundy, 0 = użyj globalnego czasu appki
+
+moon:
+  enabled: true
+  when_show: "night"          # never | always | risen | night
+  use_moon_for_clear_night: true
+  use_moon_for_sunny_night: true
+
+sun:
+  show_rise_set: true
+  event_minute_threshold: 30   # pokaż komunikat X minut przed wschodem/zachodem
+  time_type: "Actual"          # Actual | Relative
+  time_format: "%-I%M%p"       # strftime, używane gdy time_type = Actual
+  message_duration: 30
+
+pressure:
+  enabled: false             # ustaw true, żeby włączyć osobną appkę z ciśnieniem
+  app_topic: "jeef_pressure"  # nazwa custom app na AWTRIX
+  trend_window_hours: 3        # porównanie z odczytem sprzed ilu godzin
+  message_duration: 30         # sekundy wyświetlania w rotacji AWTRIX
+  low_hpa: 1000                # poniżej tego -> kolor low_color
+  high_hpa: 1020                # powyżej tego -> kolor high_color
+  low_color: "#4FA8E8"          # niebieski
+  normal_color: "#FFFFFF"       # biały
+  high_color: "#F2A93B"         # bursztynowy
+
+awtrix:
+  transport: "http"    # http (bezpośrednio do urządzenia, bez brokera) | mqtt
+  app_topic: "jeef_weather"
+  devices:
+    # transport: http -> adresy IP/hostname AWTRIX-ów
+    - "192.168.1.50"
+    # transport: mqtt -> bazowe topiki MQTT urządzeń, np. "awtrix_abcdef"
+  http:
+    port: 80
+    timeout: 5
+    use_https: false
+  check_icons_on_start: true   # przy starcie sprawdź, czy ikony z sekcji weather.icons są wgrane na /ICONS
+  auto_upload_missing_icons: false  # jeśli true - brakujące ikony pobierze i wgra automatycznie
+                                     # (z repo jeeftor/HomeAssistant, ten sam zestaw co dawny upload_icon.sh)
+  mqtt:
+    host: "127.0.0.1"
+    port: 1883
+    username: ""
+    password: ""
+    client_id: "awtrix-weather"
+
+poll_interval_seconds: 60
