@@ -107,3 +107,10 @@ awtrix:
     client_id: "awtrix-weather"
 
 poll_interval_seconds: 60
+
+imgw_warnings:
+  enabled: false                # ustaw true, żeby włączyć osobną appkę z ostrzeżeniami IMGW
+  teryt: "1465"                   # 4-znakowy kod powiatu (1465 = Warszawa) - sprawdź swój na meteo.imgw.pl
+  refresh_seconds: 900             # jak często pytać endpoint (darmowy, bez limitu, ale nie ma sensu częściej niż zmieniają się dane)
+  app_topic: "jeef_weather_alert"
+  message_duration: 20

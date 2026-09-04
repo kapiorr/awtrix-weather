@@ -203,6 +203,44 @@ weather:
     show_wx_alert: false
 ```
 
+## Ostrzeżenia meteorologiczne IMGW-PIB (opcjonalnie, osobna appka)
+
+Osobna appka (domyślnie `jeef_weather_alert`) pokazująca aktywne ostrzeżenie
+meteorologiczne IMGW dla Twojego powiatu - kolor tekstu zgodny z oficjalną
+paletą IMGW (żółty = stopień 1, pomarańczowy = 2, czerwony = 3). Gdy jest
+kilka aktywnych ostrzeżeń naraz, pokazujemy najsilniejsze. Znika automatycznie,
+gdy żadne ostrzeżenie już nie obowiązuje - ten sam mechanizm co appki
+wschodu/zachodu słońca i zjawisk z METAR-u.
+
+**Filtrowanie po czasie ważności:** IMGW czasem publikuje ostrzeżenia z
+wyprzedzeniem (np. "obowiązuje od jutra 18:00") - takie pomijamy, dopóki
+faktycznie nie wejdą w życie. To sprawdzane jest **przy każdym cyklu
+wysyłki** (`poll_interval_seconds`, domyślnie co 60s), niezależnie od tego,
+jak rzadko odpytujemy samo API (`refresh_seconds`) - więc nawet gdy dane w
+cache'u się "zestarzeją" w trakcie, ostrzeżenie znika z wyświetlacza najdalej
+minutę po realnym wygaśnięciu, a nie dopiero po kolejnym odświeżeniu z API.
+
+```yaml
+imgw_warnings:
+  enabled: true
+  teryt: "1465"   # 4-znakowy kod POWIATU, nie gminy/dzielnicy - patrz niżej
+```
+
+**Skąd dane:** nieoficjalny, ale publicznie dostępny i darmowy endpoint JSON
+stojący za serwisem `meteo.imgw.pl` (ten sam, z którego korzysta oficjalna
+strona IMGW i kilka integracji Home Assistant) - bez klucza API, bez limitu
+zapytań. Zwraca wszystkie aktywne ostrzeżenia w Polsce naraz + mapę kod TERYT
+→ lista ostrzeżeń; filtrujemy po naszej stronie do jednego powiatu.
+
+**Kod TERYT — ważne:** to musi być **4-znakowy kod powiatu** (np. `1465` dla
+Warszawy), nie kod gminy ani dzielnicy (te bywają dłuższe, np. 6-7 znaków, i
+nigdy nie znajdą dopasowania). Warszawa administracyjnie jest jednym powiatem
+- dzielnice nie mają osobnych kodów w tym systemie. Znajdziesz swój kod
+wyszukując miejscowość na [meteo.imgw.pl](https://meteo.imgw.pl). Jeśli wpiszesz
+coś, co nie wygląda na poprawny 4-znakowy kod, przy starcie dostaniesz
+ostrzeżenie w logu (`sanity_check.py`), zamiast cichego "nic się nigdy nie
+pokaże".
+
 ## Ciśnienie atmosferyczne (opcjonalne, osobna appka)
 
 Domyślnie wyłączone. Włączasz przez:
@@ -368,6 +406,7 @@ awtrix_weather/
     openweathermap_free.py            - dostawca OpenWeatherMap (klasyczne /data/2.5, bez subskrypcji)
   astro.py                          - słońce i księżyc liczone lokalnie (ephem)
   metar.py                           - opcjonalny override temp/ciśnienia z prawdziwego METAR (AVWX)
+  imgw_warnings.py                    - ostrzeżenia meteorologiczne IMGW dla wybranego powiatu (TERYT)
   sanity_check.py                    - wykrywanie niedopasowania color_matrix do units
   color.py                          - interpolacja koloru wg temperatury
   moon.py                           - bitmapy faz księżyca + ikony clear-night

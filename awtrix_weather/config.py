@@ -65,6 +65,15 @@ class SunConfig:
 
 
 @dataclass
+class ImgwWarningsConfig:
+    enabled: bool = False
+    teryt: str = ""  # 4-znakowy kod powiatu, np. "1465" dla Warszawy
+    refresh_seconds: int = 900
+    app_topic: str = "jeef_weather_alert"
+    message_duration: int = 20
+
+
+@dataclass
 class PressureConfig:
     enabled: bool = False
     app_topic: str = "jeef_pressure"
@@ -111,6 +120,7 @@ class AppConfig:
     moon: MoonConfig
     sun: SunConfig
     pressure: PressureConfig
+    imgw_warnings: ImgwWarningsConfig
     awtrix: AwtrixConfig
     poll_interval_seconds: int = 60
 
@@ -191,6 +201,15 @@ def load_config(path: str) -> AppConfig:
         high_color=str(p_raw.get("high_color", "#F2A93B")),
     )
 
+    iw_raw = raw.get("imgw_warnings", {})
+    imgw_warnings = ImgwWarningsConfig(
+        enabled=bool(iw_raw.get("enabled", False)),
+        teryt=str(iw_raw.get("teryt", "")).strip(),
+        refresh_seconds=int(iw_raw.get("refresh_seconds", 900)),
+        app_topic=str(iw_raw.get("app_topic", "jeef_weather_alert")),
+        message_duration=int(iw_raw.get("message_duration", 20)),
+    )
+
     a_raw = raw.get("awtrix", {})
     http_raw = a_raw.get("http", {})
     mqtt_raw = a_raw.get("mqtt", {})
@@ -220,6 +239,7 @@ def load_config(path: str) -> AppConfig:
         moon=moon,
         sun=sun,
         pressure=pressure,
+        imgw_warnings=imgw_warnings,
         awtrix=awtrix,
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
     )

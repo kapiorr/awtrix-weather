@@ -35,3 +35,19 @@ def check_color_matrix_units(cfg: AppConfig) -> None:
             "dobrane. Podmień color_matrix na skalę Fahrenheita albo ustaw units: metric.",
             lo, hi,
         )
+
+
+def check_teryt_code(cfg: AppConfig) -> None:
+    """Kod TERYT używany przez endpoint ostrzeżeń IMGW to zawsze 4-znakowy
+    kod POWIATU (np. "1465" dla Warszawy) - dzielnice/gminy mają dłuższe
+    kody, które nigdy nie znajdą dopasowania w danych z IMGW."""
+    if not cfg.imgw_warnings.enabled:
+        return
+    teryt = cfg.imgw_warnings.teryt
+    if len(teryt) != 4 or not teryt.isdigit():
+        log.warning(
+            "imgw_warnings.teryt=%r nie wygląda na poprawny 4-znakowy kod powiatu "
+            "(np. '1465' dla Warszawy) - ostrzeżenia prawdopodobnie nigdy się nie pojawią. "
+            "Sprawdź kod na https://meteo.imgw.pl (wyszukaj swoją miejscowość).",
+            teryt,
+        )

@@ -7,10 +7,11 @@ from .awtrix_client import create_client
 from .config import AppConfig
 from .icon_check import validate_icons
 from .icon_upload import sync_missing_icons
+from .imgw_warnings import CachingImgwWarningsReader, build_alert_payload
 from .metar import CachingMetarReader, build_wx_payload
 from .pressure import PressureTrendTracker, build_pressure_payload
 from .render import build_payloads
-from .sanity_check import check_color_matrix_units
+from .sanity_check import check_color_matrix_units, check_teryt_code
 from .weather import create_provider
 from .weather.caching import CachingWeatherProvider
 
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 
 def run(cfg: AppConfig) -> None:
     check_color_matrix_units(cfg)
+    check_teryt_code(cfg)
 
     provider = CachingWeatherProvider(
         create_provider(cfg.weather.provider, openweathermap_api_key=cfg.weather.openweathermap_api_key),
@@ -35,6 +37,12 @@ def run(cfg: AppConfig) -> None:
             cfg.weather.metar_override.station,
             cfg.weather.metar_override.avwx_api_key,
             cfg.weather.metar_override.refresh_seconds,
+        )
+
+    warnings_reader = None
+    if cfg.imgw_warnings.enabled:
+        warnings_reader = CachingImgwWarningsReader(
+            cfg.imgw_warnings.teryt, cfg.imgw_warnings.refresh_seconds
         )
 
     try:
@@ -96,6 +104,22 @@ def run(cfg: AppConfig) -> None:
                         log.warning(
                             "pressure.enabled=true, ale dostawca pogody %s nie zwrócił ciśnienia",
                             cfg.weather.provider,
+                        )
+
+                if warnings_reader is not None:
+                    try:
+                        warnings = warnings_reader.read()
+                        alert_payload = build_alert_payload(warnings, cfg.imgw_warnings.message_duration)
+                        for device in cfg.awtrix.devices:
+                            try:
+                                client.send(device, cfg.imgw_warnings.app_topic, alert_payload)
+                            except Exception:
+                                log.error("Nie udało się wysłać ostrzeżenia do %s", device, exc_info=True)
+                    except Exception:
+                        log.warning(
+                            "Nie udało się pobrać ostrzeżeń IMGW dla %s - pomijam ten cykl",
+                            cfg.imgw_warnings.teryt,
+                            exc_info=True,
                         )
 
                 log.info(
