@@ -7,7 +7,7 @@ from .awtrix_client import create_client
 from .config import AppConfig
 from .icon_check import validate_icons
 from .icon_upload import sync_missing_icons
-from .metar import CachingMetarReader
+from .metar import CachingMetarReader, build_wx_payload
 from .pressure import PressureTrendTracker, build_pressure_payload
 from .render import build_payloads
 from .sanity_check import check_color_matrix_units
@@ -58,7 +58,9 @@ def run(cfg: AppConfig) -> None:
         while True:
             cycle_start = time.monotonic()
             try:
-                main_payload, sun_payload, pressure_hpa = build_payloads(provider, cfg, metar_reader)
+                main_payload, sun_payload, pressure_hpa, metar_wx_description = build_payloads(
+                    provider, cfg, metar_reader
+                )
 
                 for device in cfg.awtrix.devices:
                     try:
@@ -68,6 +70,14 @@ def run(cfg: AppConfig) -> None:
                         # event_minute_threshold (inaczej zostaje ostatni komunikat na
                         # zawsze, np. "zachód słońca" widoczny długo po zachodzie).
                         client.send(device, f"{cfg.awtrix.app_topic}_sun", sun_payload)
+
+                        if cfg.weather.metar_override.enabled and cfg.weather.metar_override.show_wx_alert:
+                            wx_payload = build_wx_payload(
+                                metar_wx_description, cfg.weather.metar_override.wx_message_duration
+                            )
+                            # tak samo jak _sun - zawsze wysyłamy, {} czyści appkę gdy
+                            # zjawisko ustąpiło (np. przelotny deszcz się skończył)
+                            client.send(device, cfg.weather.metar_override.wx_app_topic, wx_payload)
                     except Exception:
                         log.error("Nie udało się wysłać do %s (pomijam to urządzenie w tym cyklu)", device, exc_info=True)
 

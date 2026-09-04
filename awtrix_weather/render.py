@@ -35,7 +35,7 @@ def _should_show_moon(cfg: AppConfig, moon_risen: bool, sun_elevation: float) ->
 
 def build_payloads(
     provider: WeatherProvider, cfg: AppConfig, metar_reader=None
-) -> tuple[dict, dict, float | None]:
+) -> tuple[dict, dict, float | None, str | None]:
     w = cfg.weather
     loc = cfg.location
 
@@ -50,6 +50,7 @@ def build_payloads(
                 weather_data.current.temperature = metar.temperature_c
             if metar.pressure_hpa is not None:
                 weather_data.current.pressure_hpa = metar.pressure_hpa
+            metar_wx_description = metar.wx_description
         except Exception:
             log.warning(
                 "Nie udało się pobrać METAR (%s) - używam danych z %s",
@@ -57,6 +58,9 @@ def build_payloads(
                 provider.name,
                 exc_info=True,
             )
+            metar_wx_description = None
+    else:
+        metar_wx_description = None
 
     current_condition = weather_data.current.condition
     current_temp = weather_data.current.temperature
@@ -154,4 +158,4 @@ def build_payloads(
 
     sun_payload = sun_info.payload if sun_info.payload else {}
 
-    return main_payload, sun_payload, weather_data.current.pressure_hpa
+    return main_payload, sun_payload, weather_data.current.pressure_hpa, metar_wx_description

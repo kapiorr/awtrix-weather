@@ -185,6 +185,24 @@ dwuznaczności). Ciśnienie bywa w hPa (`Q1013`, stacje europejskie) albo inHg
 (`A3005`, stacje północnoamerykańskie) - konwertujemy automatycznie do hPa
 niezależnie od tego, co raportuje konkretna stacja.
 
+### Bieżące zjawiska pogodowe (SHRA, TSRA, FG...) - osobna appka
+
+METAR zgłasza też bieżące zjawiska (`SHRA` - przelotny deszcz, `TSRA` -
+burza z deszczem, `FG` - mgła, `SN` - śnieg, itd.) w polu `wx_codes` - to
+przychodzi w tym samym zapytaniu co temperatura/ciśnienie, więc nie kosztuje
+dodatkowego wywołania API. Domyślnie włączone (`show_wx_alert: true`, wymaga
+`metar_override.enabled: true`) - osobna appka (`jeef_weather_wx`) pokazuje
+opis zjawiska (np. "Rain Showers") na bursztynowo, i **znika automatycznie**,
+gdy zjawisko ustąpi (np. przelotny deszcz się skończył) - tak samo jak appka
+wschodu/zachodu słońca.
+
+Wyłączenie tylko tej części (zostawiając override temp/ciśnienia):
+```yaml
+weather:
+  metar_override:
+    show_wx_alert: false
+```
+
 ## Ciśnienie atmosferyczne (opcjonalne, osobna appka)
 
 Domyślnie wyłączone. Włączasz przez:

@@ -26,6 +26,9 @@ class MetarOverrideConfig:
     station: str = ""       # kod ICAO stacji, np. "EPWA"
     avwx_api_key: str = ""
     refresh_seconds: int = 900  # osobny interwał od weather.refresh_seconds
+    show_wx_alert: bool = True   # osobna appka z bieżącymi zjawiskami z METAR-u (SHRA, TSRA, FG...)
+    wx_app_topic: str = "jeef_weather_wx"
+    wx_message_duration: int = 20
 
 
 @dataclass
@@ -57,7 +60,7 @@ class SunConfig:
     show_rise_set: bool = True
     event_minute_threshold: int = 30
     time_type: str = "Actual"  # Actual|Relative
-    time_format: str = "%-I%M%p"
+    time_format: str = "%H:%M"
     message_duration: int = 30
 
 
@@ -123,6 +126,9 @@ def _load_metar_override(mo_raw: dict) -> MetarOverrideConfig:
         station=str(mo_raw.get("station", "")).upper(),
         avwx_api_key=_env("AVWX_API_KEY", mo_raw.get("avwx_api_key", "")),
         refresh_seconds=int(mo_raw.get("refresh_seconds", 900)),
+        show_wx_alert=bool(mo_raw.get("show_wx_alert", True)),
+        wx_app_topic=str(mo_raw.get("wx_app_topic", "jeef_weather_wx")),
+        wx_message_duration=int(mo_raw.get("wx_message_duration", 20)),
     )
 
 
@@ -168,7 +174,7 @@ def load_config(path: str) -> AppConfig:
         show_rise_set=bool(s_raw.get("show_rise_set", True)),
         event_minute_threshold=int(s_raw.get("event_minute_threshold", 30)),
         time_type=s_raw.get("time_type", "Actual"),
-        time_format=s_raw.get("time_format", "%-I%M%p"),
+        time_format=s_raw.get("time_format", "%H:%M"),
         message_duration=int(s_raw.get("message_duration", 30)),
     )
 

@@ -25,6 +25,7 @@ INHG_TO_HPA = 33.8639
 class MetarReading:
     temperature_c: float | None
     pressure_hpa: float | None
+    wx_description: str | None  # np. "Rain Showers", None gdy brak zjawisk (CAVOK/pogoda czysta)
     raw: str | None
 
 
@@ -55,7 +56,25 @@ def fetch_metar(station: str, api_key: str, timeout: float = 10.0) -> MetarReadi
         alt_unit = str((data.get("units") or {}).get("altimeter", "hPa")).lower()
         pressure_hpa = alt_value * INHG_TO_HPA if alt_unit in ("inhg", "in") else alt_value
 
-    return MetarReading(temperature_c=temperature_c, pressure_hpa=pressure_hpa, raw=data.get("raw"))
+    wx_description = None
+    wx_codes = data.get("wx_codes")
+    if isinstance(wx_codes, list) and wx_codes:
+        parts = []
+        for code in wx_codes:
+            if isinstance(code, dict):
+                parts.append(str(code.get("value") or code.get("repr") or "").strip())
+            elif isinstance(code, str):
+                parts.append(code)
+        parts = [p for p in parts if p]
+        if parts:
+            wx_description = ", ".join(parts)
+
+    return MetarReading(
+        temperature_c=temperature_c,
+        pressure_hpa=pressure_hpa,
+        wx_description=wx_description,
+        raw=data.get("raw"),
+    )
 
 
 class CachingMetarReader:
@@ -77,10 +96,28 @@ class CachingMetarReader:
             self._cached = reading
             self._cached_at = now
             log.info(
-                "Pobrano METAR %s: temp=%s°C, ciśnienie=%s hPa (%s)",
+                "Pobrano METAR %s: temp=%s°C, ciśnienie=%s hPa, zjawiska=%s (%s)",
                 self.station,
                 reading.temperature_c,
                 round(reading.pressure_hpa, 1) if reading.pressure_hpa is not None else None,
+                reading.wx_description or "brak",
                 reading.raw,
             )
         return self._cached
+
+
+def build_wx_payload(wx_description: str | None, message_duration: int) -> dict:
+    """Payload dla osobnej appki z bieżącymi zjawiskami pogodowymi z METAR-u
+    (np. "Rain Showers", "Thunderstorm"). Pusty {} gdy nic do zgłoszenia -
+    to jedyny sposób, żeby AWTRIX skasował poprzedni komunikat (patrz appka
+    wschodu/zachodu słońca - ten sam mechanizm)."""
+    if not wx_description:
+        return {}
+    return {
+        "text": wx_description,
+        "color": "#F2A93B",  # bursztynowy - wizualnie "ostrzegawczy"
+        "duration": message_duration,
+        "pushIcon": 2,
+        "lifetime": 120,
+        "lifetimeMode": 1,
+    }

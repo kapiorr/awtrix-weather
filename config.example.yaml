@@ -21,6 +21,9 @@ weather:
     station: "EPWA"            # kod ICAO stacji
     avwx_api_key: ""            # klucz z avwx.rest, albo zmienna środowiskowa AVWX_API_KEY
     refresh_seconds: 900         # osobny interwał od weather.refresh_seconds powyżej
+    show_wx_alert: true           # osobna appka z bieżącymi zjawiskami z METAR-u (SHRA, TSRA, FG...)
+    wx_app_topic: "jeef_weather_wx"
+    wx_message_duration: 20
   hours_to_show: 12         # 0-24, ile godzin prognozy na dole wyświetlacza
   temp_digits: 0            # 0-2, miejsca po przecinku
   temp_suffix: "°"          # "", "°", "°F", "°C", "F", "C"
@@ -68,7 +71,7 @@ sun:
   show_rise_set: true
   event_minute_threshold: 30   # pokaż komunikat X minut przed wschodem/zachodem
   time_type: "Actual"          # Actual | Relative
-  time_format: "%-I%M%p"       # strftime, używane gdy time_type = Actual
+  time_format: "%H:%M"       # strftime, używane gdy time_type = Actual
   message_duration: 30
 
 pressure:
