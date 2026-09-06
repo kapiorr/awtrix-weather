@@ -6,6 +6,7 @@ services:
     environment:
       TZ: "Europe/Warsaw"
       LOG_LEVEL: "INFO"   # zmień na "DEBUG" (i zrestartuj: docker compose up -d) dla logów jak przy -v
+      CONFIG_PATH: "/app/config/config.yaml"   # żeby upload_icons.py / check_imgw_warnings.py działały bez -c
       # Sekrety - opcjonalnie zamiast trzymać je w config.yaml:
       # OWM_API_KEY: ""
       # MQTT_HOST: "127.0.0.1"

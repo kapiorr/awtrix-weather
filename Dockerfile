@@ -9,8 +9,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py .
-COPY upload_icons.py .
+COPY *.py ./
 COPY awtrix_weather/ ./awtrix_weather/
 
 # Zabezpieczenie: gdyby na hoście leżały jakieś stare __pycache__/*.pyc

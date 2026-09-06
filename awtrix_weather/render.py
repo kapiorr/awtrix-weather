@@ -46,9 +46,10 @@ def build_payloads(
     if metar_reader is not None:
         try:
             metar = metar_reader.read()
-            if metar.temperature_c is not None:
+            mo = cfg.weather.metar_override
+            if mo.override_temperature and metar.temperature_c is not None:
                 weather_data.current.temperature = metar.temperature_c
-            if metar.pressure_hpa is not None:
+            if mo.override_pressure and metar.pressure_hpa is not None:
                 weather_data.current.pressure_hpa = metar.pressure_hpa
             metar_wx_description = metar.wx_description
         except Exception:

@@ -26,6 +26,8 @@ class MetarOverrideConfig:
     station: str = ""       # kod ICAO stacji, np. "EPWA"
     avwx_api_key: str = ""
     refresh_seconds: int = 900  # osobny interwał od weather.refresh_seconds
+    override_temperature: bool = True
+    override_pressure: bool = True
     show_wx_alert: bool = True   # osobna appka z bieżącymi zjawiskami z METAR-u (SHRA, TSRA, FG...)
     wx_app_topic: str = "jeef_weather_wx"
     wx_message_duration: int = 20
@@ -36,7 +38,7 @@ class WeatherConfig:
     provider: str = "open-meteo"  # open-meteo | openweathermap
     openweathermap_api_key: str = ""
     units: str = "metric"  # metric | imperial
-    refresh_seconds: int = 300  # jak często realnie odpytywać API pogodowe (cache między) - dotyczy też METAR-u
+    refresh_seconds: int = 300  # jak często realnie odpytywać API pogodowe (cache między) - osobny licznik od METAR-u (weather.metar_override.refresh_seconds)
     hours_to_show: int = 12
     temp_digits: int = 0
     temp_suffix: str = "°"
@@ -136,6 +138,8 @@ def _load_metar_override(mo_raw: dict) -> MetarOverrideConfig:
         station=str(mo_raw.get("station", "")).upper(),
         avwx_api_key=_env("AVWX_API_KEY", mo_raw.get("avwx_api_key", "")),
         refresh_seconds=int(mo_raw.get("refresh_seconds", 900)),
+        override_temperature=bool(mo_raw.get("override_temperature", True)),
+        override_pressure=bool(mo_raw.get("override_pressure", True)),
         show_wx_alert=bool(mo_raw.get("show_wx_alert", True)),
         wx_app_topic=str(mo_raw.get("wx_app_topic", "jeef_weather_wx")),
         wx_message_duration=int(mo_raw.get("wx_message_duration", 20)),

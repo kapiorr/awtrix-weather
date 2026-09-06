@@ -9,25 +9,45 @@
 > jeeftorowi** za oryginalny projekt i za darmowy zestaw ikon pogodowych
 > (`icons/weather/*.gif`), z którego korzysta ten skrypt.
 
-**Bez Home Assistant.** Dane pogodowe, faza księżyca oraz wschody/zachody słońca
-są liczone/pobierane bezpośrednio w skrypcie:
+**Bez Home Assistant.** Dane pogodowe, faza księżyca, wschody/zachody słońca,
+ciśnienie i ostrzeżenia meteorologiczne są liczone/pobierane bezpośrednio w skrypcie:
 
-- **pogoda** - Open-Meteo (domyślnie, bez klucza API) albo OpenWeatherMap (wymaga klucza) - wybór w `config.yaml`,
+- **pogoda** - Open-Meteo (domyślnie, bez klucza API), OpenWeatherMap (One Call 3.0, wymaga klucza+subskrypcji) albo OpenWeatherMap-free (klasyczne 2.5, tylko klucz) - wybór w `config.yaml`,
+- **temperatura/ciśnienie** (opcjonalnie) - realny pomiar METAR najbliższej stacji lotniczej (przez AVWX) zamiast danych modelowych,
 - **księżyc i słońce** - liczone lokalnie biblioteką `ephem` na podstawie Twoich współrzędnych (bez żadnego zewnętrznego API do astronomii),
+- **ciśnienie z trendem** (opcjonalnie) - osobna appka pokazująca aktualne hPa + strzałkę rośnie/spada/stabilnie,
+- **ostrzeżenia meteorologiczne IMGW** (opcjonalnie) - osobna appka dla Twojego powiatu, kolor wg oficjalnej skali 1/2/3,
 - **AWTRIX** - domyślnie wysyłka przez **lokalne HTTP API urządzenia** (`POST http://<ip>/api/custom?name=...`), bez brokera MQTT. MQTT wciąż jest dostępny jako opcja (`awtrix.transport: mqtt`), jeśli wolisz go zostawić.
 
 Skrypt w pętli (domyślnie co 60 s):
-1. pobiera aktualną pogodę + prognozę godzinową od wybranego dostawcy,
+1. pobiera aktualną pogodę + prognozę godzinową od wybranego dostawcy (opcjonalnie nadpisując temp/ciśnienie realnym METAR-em),
 2. liczy fazę/wysokość księżyca oraz najbliższy wschód/zachód słońca (`ephem`),
-3. buduje payload JSON dokładnie w formacie, jakiego oczekuje AWTRIX (`draw`, `icon`, `overlay`, ...),
-4. wysyła go do każdego skonfigurowanego urządzenia (HTTP albo MQTT) na custom app `<app_topic>` oraz `<app_topic>_sun`.
+3. buduje payload JSON dokładnie w formacie, jakiego oczekuje AWTRIX (`draw`, `icon`, `overlay`, `text`, ...),
+4. wysyła go do każdego skonfigurowanego urządzenia (HTTP albo MQTT) - główną appkę pogody, i opcjonalnie osobne appki: wschód/zachód słońca, zjawiska z METAR-u, ciśnienie, ostrzeżenia IMGW - każda znika automatycznie, gdy nie ma nic aktualnego do pokazania.
+
+## Spis treści
+
+- [Czego potrzebujesz](#czego-potrzebujesz)
+- [Konfiguracja](#konfiguracja) (dostawca pogody, transport do AWTRIX, skala kolorów)
+- [Jak często pytany jest dostawca pogody](#jak-często-pytany-jest-dostawca-pogody)
+- [Kolor tekstu temperatury](#kolor-tekstu-temperatury)
+- [METAR - prawdziwy pomiar zamiast modelu](#metar---prawdziwy-pomiar-zamiast-modelu-opcjonalnie)
+- [Ostrzeżenia meteorologiczne IMGW-PIB](#ostrzeżenia-meteorologiczne-imgw-pib-opcjonalnie-osobna-appka)
+- [Ciśnienie atmosferyczne](#ciśnienie-atmosferyczne-opcjonalne-osobna-appka)
+- [Walidacja i automatyczne wgrywanie ikon](#walidacja-i-automatyczne-wgrywanie-ikon)
+- [Uruchomienie (Docker / lokalnie / logi DEBUG)](#uruchomienie-z-logami-debug--w-dockerze)
+- [Czym się różni od oryginalnego blueprintu HA](#czym-się-różni-od-oryginalnego-blueprintu-ha)
+- [Obsługa błędów](#obsługa-błędów)
+- [Struktura](#struktura)
 
 ## Czego potrzebujesz
 
 - Współrzędne (lat/lon) miejsca, dla którego ma być pogoda.
 - Adresy IP Twoich AWTRIX-ów w sieci lokalnej (transport HTTP, domyślny) **albo** broker MQTT + bazowe topiki urządzeń (transport MQTT).
-- Jeśli wybierzesz OpenWeatherMap: darmowy klucz API z openweathermap.org (One Call API 3.0 - darmowy limit 1000 wywołań/dzień, ale przy rejestracji OWM prosi o dane karty; jeśli to przeszkadza, zostań przy Open-Meteo, które nie wymaga żadnej rejestracji).
-- Ikony (`w-clear-night`, `w-sunny` itd.) muszą być wgrane na AWTRIX - użyj skryptu `upload_icon.sh` z repo jeeftor, jeśli jeszcze tego nie zrobiłeś.
+- Jeśli wybierzesz OpenWeatherMap (dowolny wariant): darmowy klucz API z openweathermap.org.
+- Jeśli włączysz override METAR-em: darmowy klucz z [avwx.rest](https://avwx.rest).
+- Jeśli włączysz ostrzeżenia IMGW: 4-znakowy kod TERYT Twojego powiatu (nic więcej - ten endpoint jest bez klucza).
+- Ikony (`w-clear-night`, `w-sunny` itd.) muszą być wgrane na AWTRIX - skrypt sam to sprawdza i (opcjonalnie) sam wgrywa brakujące przy starcie, patrz niżej.
 
 ## Konfiguracja
 
@@ -114,7 +134,8 @@ weather:
 Główna pętla chodzi co `poll_interval_seconds` (domyślnie **60 s**) - w każdym
 cyklu odświeżamy księżyc/słońce i wysyłamy do AWTRIX-a. Samo API pogodowe jest
 jednak cache'owane osobno: realnie pytane co `weather.refresh_seconds`
-(domyślnie **300 s / 5 min**), między tym używane są dane z cache.
+(domyślnie w kodzie 300s, ale w `config.example.yaml` ustawione na **900 s /
+15 min**), między tym używane są dane z cache.
 
 Dlaczego osobno: prognoza godzinowa i tak nie zmienia się co minutę, a przy
 OpenWeatherMap (darmowy limit **1000 zapytań/dzień**) odpytywanie co 60s dałoby
@@ -169,10 +190,24 @@ weather:
 
 **Co się dokładnie dzieje:** ikona pogody i prognoza godzinowa (kolorowy pasek
 na dole) zawsze pochodzą z `weather.provider` - METAR nie daje prognozy, tylko
-bieżący pomiar. Override podmienia wyłącznie temperaturę i ciśnienie na świeży
-odczyt ze stacji. Jeśli AVWX akurat nie odpowie (limit, awaria), skrypt **nie
-wywala się** - loguje `WARNING` i po prostu zostaje przy wartościach z
-głównego providera dla tego cyklu.
+bieżący pomiar. Override podmienia temperaturę i/lub ciśnienie na świeży
+odczyt ze stacji - **możesz wybrać, którą z tych dwóch wartości nadpisać**,
+niezależnie od drugiej:
+
+```yaml
+weather:
+  metar_override:
+    override_temperature: true   # false = temperatura zostaje z głównego providera
+    override_pressure: true       # false = ciśnienie zostaje z głównego providera
+```
+
+Np. jeśli chcesz tylko dokładniejsze ciśnienie (METAR/QNH bywa lepszym
+źródłem ciśnienia niż model), ale wolisz temperaturę z modelu (bo METAR
+mierzy w konkretnym punkcie na lotnisku, a Ty mieszkasz gdzie indziej),
+ustaw `override_temperature: false`, `override_pressure: true`. Jeśli AVWX
+akurat nie odpowie (limit, awaria), skrypt **nie wywala się** - loguje
+`WARNING` i po prostu zostaje przy wartościach z głównego providera dla tego
+cyklu (dla obu pól, niezależnie od ustawień override).
 
 METAR i tak aktualizuje się na stacji zwykle raz na godzinę, więc domyślny
 `weather.metar_override.refresh_seconds: 900` (15 min) to rozsądny punkt
@@ -389,6 +424,9 @@ Wszystkie błędy trafiają do logu na poziomie `ERROR` z pełnym tracebackiem
   psuje aktualizacji reszty (ani appki ciśnienia) w tym samym cyklu.
 - Błąd METAR-u (AVWX) nie blokuje niczego - `WARNING` w logu, ciche
   przełączenie z powrotem na dane z głównego dostawcy pogody na ten cykl.
+- Błąd endpointu ostrzeżeń IMGW nie blokuje niczego - `WARNING` w logu, po
+  prostu pomijamy tę appkę w danym cyklu, reszta (pogoda, ciśnienie, METAR)
+  działa dalej normalnie.
 - Błąd walidacji/uploadu ikon jest całkowicie odizolowany od reszty aplikacji.
 
 ## Struktura

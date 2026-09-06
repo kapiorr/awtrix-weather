@@ -17,10 +17,12 @@ weather:
   refresh_seconds: 900       # jak często realnie pytać API pogodowe (sek.) - między tym cache; pętla i tak chodzi co poll_interval_seconds
 
   metar_override:
-    enabled: false            # jeśli true - temperatura i ciśnienie brane z prawdziwego pomiaru METAR zamiast z powyższego providera (ikona/prognoza zostają z providera)
+    enabled: false            # jeśli true - temperatura i/lub ciśnienie brane z prawdziwego pomiaru METAR (ikona/prognoza zawsze zostają z powyższego providera)
     station: "EPWA"            # kod ICAO stacji
     avwx_api_key: ""            # klucz z avwx.rest, albo zmienna środowiskowa AVWX_API_KEY
     refresh_seconds: 900         # osobny interwał od weather.refresh_seconds powyżej
+    override_temperature: true   # false = zostaw temperaturę z głównego providera, nadpisuj tylko ciśnienie
+    override_pressure: true       # false = zostaw ciśnienie z głównego providera, nadpisuj tylko temperaturę
     show_wx_alert: true           # osobna appka z bieżącymi zjawiskami z METAR-u (SHRA, TSRA, FG...)
     wx_app_topic: "jeef_weather_wx"
     wx_message_duration: 20

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from awtrix_weather.config import load_config
@@ -21,7 +22,7 @@ from awtrix_weather.icon_upload import download_icon_gif, upload_icon_to_device
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Wgraj ikony pogodowe na AWTRIX (transport HTTP)")
-    parser.add_argument("-c", "--config", default="config.yaml")
+    parser.add_argument("-c", "--config", default=os.environ.get("CONFIG_PATH", "config.yaml"))
     parser.add_argument("--device", help="Ogranicz do jednego urządzenia (IP)")
     parser.add_argument("--all", action="store_true", help="Wgraj/nadpisz wszystkie ikony, nie tylko brakujące")
     parser.add_argument("-v", "--verbose", action="store_true")
