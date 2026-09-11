@@ -60,6 +60,8 @@ weather:
     windy-variant: "w-windy-variant"
     sunrise: "w-sunrise"
     sunset: "w-sunset"
+    # Opcjonalnie: osobna ikona nocna dla dowolnego warunku - dopisz klucz z sufiksem "-night",
+    # np. cloudy-night: "w-cloudy-night" - patrz README, sekcja "Osobne ikony dla nocy"
   show_overlay: true
   message_duration_forecast: 30   # sekundy, 0 = użyj globalnego czasu appki
 

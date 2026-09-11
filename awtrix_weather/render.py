@@ -118,6 +118,10 @@ def build_payloads(
         moon_x = 0
     else:
         icon = w.icons.get(current_condition, "")
+        if not weather_data.current.is_day:
+            night_icon = w.icons.get(f"{current_condition}-night")
+            if night_icon:
+                icon = night_icon
         moon_x = 23
 
     moon_cmd = None

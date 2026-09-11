@@ -35,8 +35,12 @@ _OWM_RANGE_MAP: list[tuple[range, str]] = [
 ]
 
 
+def is_day_from_icon(icon: str) -> bool:
+    return icon.endswith("d") if icon else True
+
+
 def map_condition(owm_id: int, icon: str) -> str:
-    is_day = icon.endswith("d") if icon else True
+    is_day = is_day_from_icon(icon)
 
     if owm_id == 800:
         return "sunny" if is_day else "clear-night"
@@ -80,6 +84,7 @@ class OpenWeatherMapProvider(WeatherProvider):
             temperature=float(cur_raw["temp"]),
             condition=map_condition(cur_weather["id"], cur_weather.get("icon", "")),
             pressure_hpa=float(cur_raw["pressure"]) if cur_raw.get("pressure") is not None else None,
+            is_day=is_day_from_icon(cur_weather.get("icon", "")),
         )
 
         hourly: list[ForecastPoint] = []

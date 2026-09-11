@@ -28,7 +28,7 @@ Skrypt w pętli (domyślnie co 60 s):
 ## Spis treści
 
 - [Czego potrzebujesz](#czego-potrzebujesz)
-- [Konfiguracja](#konfiguracja) (dostawca pogody, transport do AWTRIX, skala kolorów)
+- [Konfiguracja](#konfiguracja) (dostawca pogody, transport do AWTRIX, skala kolorów, ikony nocne)
 - [Jak często pytany jest dostawca pogody](#jak-często-pytany-jest-dostawca-pogody)
 - [Kolor tekstu temperatury](#kolor-tekstu-temperatury)
 - [METAR - prawdziwy pomiar zamiast modelu](#metar---prawdziwy-pomiar-zamiast-modelu-opcjonalnie)
@@ -128,6 +128,32 @@ weather:
     "90": "#CF3927"
     "100": "#A12527"
 ```
+
+### Osobne ikony dla nocy (opcjonalnie)
+
+Domyślnie mamy rozróżnienie dzień/noc tylko dla bezchmurnego nieba
+(`sunny` w dzień → `clear-night` w nocy, z podmianą na ikonę fazy księżyca).
+Wszystkie pozostałe warunki (`cloudy`, `rainy`, `snowy`...) używają tej samej
+ikony o każdej porze dnia - tak jak w oryginalnym blueprincie HA.
+
+Jeśli chcesz mieć osobną, "nocną" wersję ikony dla dowolnego innego warunku
+(np. przyciemnioną `w-cloudy-night` zamiast zwykłej `w-cloudy` po zmroku),
+dopisz w `weather.icons` klucz z sufiksem `-night`:
+
+```yaml
+weather:
+  icons:
+    cloudy: "w-cloudy"
+    cloudy-night: "w-cloudy-night"   # opcjonalnie - własna ikona, sam ją przygotuj i wgraj
+```
+
+Jeśli takiego klucza nie ma, nic się nie zmienia (dzień i noc wyglądają tak
+samo, jak dotąd) - to czysto opcjonalne, wsteczne rozszerzenie. Dzień/noc dla
+tego mechanizmu ustala **sam dostawca pogody** (sufiks `d`/`n` w jego danych),
+nie nasze własne liczenie przez `ephem` używane gdzie indziej (widoczność
+księżyca, komunikat wschodu/zachodu) - to dwa niezależne źródła prawdy o tym
+"czy jest dzień", które w okolicach wschodu/zachodu mogą się różnić o kilka
+minut.
 
 ## Jak często pytany jest dostawca pogody
 
@@ -422,6 +448,14 @@ Wszystkie błędy trafiają do logu na poziomie `ERROR` z pełnym tracebackiem
 - Błąd wysyłki do **jednego** urządzenia AWTRIX **nie blokuje pozostałych** -
   każde urządzenie ma własny `try/except`, więc jedno padnięte urządzenie nie
   psuje aktualizacji reszty (ani appki ciśnienia) w tym samym cyklu.
+  Dodatkowo: gdy urządzenie okaże się nieosiągalne (offline, zły IP, timeout),
+  logujemy to jako **jedną czytelną linijkę** (`X nieosiągalne (...) - pomijam
+  do końca tego cyklu`), bez pełnego tracebacka requests/urllib3, i **nie
+  próbujemy do niego ponownie w tym samym cyklu** - bez tego jedno martwe
+  urządzenie potrafiłoby wygenerować 3-4 identyczne tracebacki na cykl (osobno
+  dla appki pogody, ciśnienia, ostrzeżeń...). Inne, nieoczekiwane błędy
+  (nie związane z osiągalnością) nadal logują pełny traceback - to może być
+  prawdziwy bug, więc nie wyciszamy go.
 - Błąd METAR-u (AVWX) nie blokuje niczego - `WARNING` w logu, ciche
   przełączenie z powrotem na dane z głównego dostawcy pogody na ten cykl.
 - Błąd endpointu ostrzeżeń IMGW nie blokuje niczego - `WARNING` w logu, po

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from .base import CurrentWeather, ForecastPoint, WeatherData, WeatherProvider
-from .openweathermap import map_condition
+from .openweathermap import is_day_from_icon, map_condition
 
 
 def _interpolate_hourly(
@@ -78,6 +78,7 @@ class OpenWeatherMapFreeProvider(WeatherProvider):
             temperature=float(cur["main"]["temp"]),
             condition=map_condition(cw["id"], cw.get("icon", "")),
             pressure_hpa=float(cur["main"]["pressure"]) if cur.get("main", {}).get("pressure") is not None else None,
+            is_day=is_day_from_icon(cw.get("icon", "")),
         )
 
         fc_resp = requests.get(

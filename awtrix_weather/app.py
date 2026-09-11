@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from .awtrix_client import create_client
+from .awtrix_client import AwtrixUnreachableError, create_client
 from .config import AppConfig
 from .icon_check import validate_icons
 from .icon_upload import sync_missing_icons
@@ -16,6 +16,31 @@ from .weather import create_provider
 from .weather.caching import CachingWeatherProvider
 
 log = logging.getLogger(__name__)
+
+
+def _send(client, device: str, app_name: str, payload: dict, unreachable: set[str]) -> None:
+    """Wysyła jeden payload do jednego urządzenia, z ładną obsługą błędów:
+
+    - jeśli urządzenie już okazało się nieosiągalne w tym cyklu (jest w
+      `unreachable`), w ogóle nie próbujemy ponownie - jedno urządzenie offline
+      nie ma sensu bombardować 3-4 razy w tej samej sekundzie (appka pogody,
+      wschód/zachód, ciśnienie, ostrzeżenia - każda osobno by próbowała),
+    - `AwtrixUnreachableError` (offline, timeout, zły IP) loguje się jako
+      JEDNA czytelna linijka, bez pełnego tracebacka requests/urllib3,
+    - każdy inny, nieoczekiwany wyjątek nadal loguje się z pełnym
+      tracebackiem (`exc_info=True`) - to może być prawdziwy bug, nie warto
+      go wyciszać.
+    """
+    if device in unreachable:
+        log.debug("%s: pomijam wysyłkę do %s (już nieosiągalne w tym cyklu)", app_name, device)
+        return
+    try:
+        client.send(device, app_name, payload)
+    except AwtrixUnreachableError as exc:
+        log.error("%s nieosiągalne (%s) - pomijam do końca tego cyklu", exc.device, exc.reason)
+        unreachable.add(device)
+    except Exception:
+        log.error("Nie udało się wysłać '%s' do %s", app_name, device, exc_info=True)
 
 
 def run(cfg: AppConfig) -> None:
@@ -65,29 +90,25 @@ def run(cfg: AppConfig) -> None:
     try:
         while True:
             cycle_start = time.monotonic()
+            unreachable: set[str] = set()
             try:
                 main_payload, sun_payload, pressure_hpa, metar_wx_description = build_payloads(
                     provider, cfg, metar_reader
                 )
 
                 for device in cfg.awtrix.devices:
-                    try:
-                        client.send(device, cfg.awtrix.app_topic, main_payload)
-                        # Wysyłamy ZAWSZE, nawet pusty payload ({}) - to jedyny sposób,
-                        # żeby AWTRIX skasował/wyczyścił appkę, gdy jesteśmy poza oknem
-                        # event_minute_threshold (inaczej zostaje ostatni komunikat na
-                        # zawsze, np. "zachód słońca" widoczny długo po zachodzie).
-                        client.send(device, f"{cfg.awtrix.app_topic}_sun", sun_payload)
+                    _send(client, device, cfg.awtrix.app_topic, main_payload, unreachable)
+                    # Wysyłamy ZAWSZE, nawet pusty payload ({}) - to jedyny sposób,
+                    # żeby AWTRIX skasował/wyczyścił appkę, gdy jesteśmy poza oknem
+                    # event_minute_threshold (inaczej zostaje ostatni komunikat na
+                    # zawsze, np. "zachód słońca" widoczny długo po zachodzie).
+                    _send(client, device, f"{cfg.awtrix.app_topic}_sun", sun_payload, unreachable)
 
-                        if cfg.weather.metar_override.enabled and cfg.weather.metar_override.show_wx_alert:
-                            wx_payload = build_wx_payload(
-                                metar_wx_description, cfg.weather.metar_override.wx_message_duration
-                            )
-                            # tak samo jak _sun - zawsze wysyłamy, {} czyści appkę gdy
-                            # zjawisko ustąpiło (np. przelotny deszcz się skończył)
-                            client.send(device, cfg.weather.metar_override.wx_app_topic, wx_payload)
-                    except Exception:
-                        log.error("Nie udało się wysłać do %s (pomijam to urządzenie w tym cyklu)", device, exc_info=True)
+                    if cfg.weather.metar_override.enabled and cfg.weather.metar_override.show_wx_alert:
+                        wx_payload = build_wx_payload(
+                            metar_wx_description, cfg.weather.metar_override.wx_message_duration
+                        )
+                        _send(client, device, cfg.weather.metar_override.wx_app_topic, wx_payload, unreachable)
 
                 if pressure_tracker is not None:
                     if pressure_hpa is not None:
@@ -95,10 +116,7 @@ def run(cfg: AppConfig) -> None:
                         trend = pressure_tracker.trend()
                         pressure_payload = build_pressure_payload(pressure_hpa, trend, cfg.pressure)
                         for device in cfg.awtrix.devices:
-                            try:
-                                client.send(device, cfg.pressure.app_topic, pressure_payload)
-                            except Exception:
-                                log.error("Nie udało się wysłać ciśnienia do %s", device, exc_info=True)
+                            _send(client, device, cfg.pressure.app_topic, pressure_payload, unreachable)
                         log.debug("Ciśnienie: %.1f hPa, trend=%s", pressure_hpa, trend)
                     else:
                         log.warning(
@@ -111,10 +129,7 @@ def run(cfg: AppConfig) -> None:
                         warnings = warnings_reader.read()
                         alert_payload = build_alert_payload(warnings, cfg.imgw_warnings.message_duration)
                         for device in cfg.awtrix.devices:
-                            try:
-                                client.send(device, cfg.imgw_warnings.app_topic, alert_payload)
-                            except Exception:
-                                log.error("Nie udało się wysłać ostrzeżenia do %s", device, exc_info=True)
+                            _send(client, device, cfg.imgw_warnings.app_topic, alert_payload, unreachable)
                     except Exception:
                         log.warning(
                             "Nie udało się pobrać ostrzeżeń IMGW dla %s - pomijam ten cykl",
@@ -122,10 +137,13 @@ def run(cfg: AppConfig) -> None:
                             exc_info=True,
                         )
 
+                ok_count = len(cfg.awtrix.devices) - len(unreachable)
                 log.info(
-                    "Zaktualizowano %s urządzeń (weather=%s)",
+                    "Zaktualizowano %s/%s urządzeń (weather=%s)%s",
+                    ok_count,
                     len(cfg.awtrix.devices),
                     main_payload.get("weather"),
+                    f" - nieosiągalne: {', '.join(sorted(unreachable))}" if unreachable else "",
                 )
             except Exception:
                 log.exception(

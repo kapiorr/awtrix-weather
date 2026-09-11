@@ -68,10 +68,12 @@ class OpenMeteoProvider(WeatherProvider):
         data = resp.json()
 
         cur = data["current"]
+        is_day = bool(cur.get("is_day", 1))
         current = CurrentWeather(
             temperature=float(cur["temperature_2m"]),
-            condition=map_condition(cur["weather_code"], bool(cur.get("is_day", 1))),
+            condition=map_condition(cur["weather_code"], is_day),
             pressure_hpa=float(cur["pressure_msl"]) if cur.get("pressure_msl") is not None else None,
+            is_day=is_day,
         )
 
         hourly_raw = data["hourly"]

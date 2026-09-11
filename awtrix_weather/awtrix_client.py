@@ -22,6 +22,19 @@ from .config import AwtrixConfig
 log = logging.getLogger(__name__)
 
 
+class AwtrixUnreachableError(Exception):
+    """Urządzenie AWTRIX nieosiągalne (offline, zły IP, brak trasy w sieci,
+    timeout...) - odróżniamy to celowo od innych błędów, żeby móc zalogować
+    jedną czytelną linijkę zamiast pełnego tracebacka requests/urllib3, i
+    żeby nie próbować bombardować tego samego martwego urządzenia w kółko
+    w ramach jednego cyklu."""
+
+    def __init__(self, device: str, reason: str):
+        self.device = device
+        self.reason = reason
+        super().__init__(f"{device}: {reason}")
+
+
 class AwtrixClient(ABC):
     @abstractmethod
     def connect(self) -> None: ...
@@ -47,14 +60,21 @@ class HttpAwtrixClient(AwtrixClient):
     def send(self, device: str, app_name: str, payload: dict) -> None:
         scheme = "https" if self.cfg.http.use_https else "http"
         url = f"{scheme}://{device}:{self.cfg.http.port}/api/custom"
-        resp = self._session.post(
-            url,
-            params={"name": app_name},
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            timeout=self.cfg.http.timeout,
-        )
-        resp.raise_for_status()
+        try:
+            resp = self._session.post(
+                url,
+                params={"name": app_name},
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                timeout=self.cfg.http.timeout,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.ConnectionError as exc:
+            raise AwtrixUnreachableError(device, "brak połączenia (offline? zły IP? sieć?)") from exc
+        except requests.exceptions.Timeout as exc:
+            raise AwtrixUnreachableError(device, f"timeout ({self.cfg.http.timeout}s)") from exc
+        except requests.exceptions.HTTPError as exc:
+            raise AwtrixUnreachableError(device, f"HTTP {resp.status_code}") from exc
         log.debug("HTTP -> %s (%s): %s", url, app_name, payload)
 
 
@@ -90,8 +110,11 @@ class MqttAwtrixClient(AwtrixClient):
     def send(self, device: str, app_name: str, payload: dict) -> None:
         topic = f"{device}/custom/{app_name}"
         body = json.dumps(payload, ensure_ascii=False)
-        result = self.client.publish(topic, body, qos=0, retain=False)
-        result.wait_for_publish(timeout=5)
+        try:
+            result = self.client.publish(topic, body, qos=0, retain=False)
+            result.wait_for_publish(timeout=5)
+        except (RuntimeError, ValueError) as exc:
+            raise AwtrixUnreachableError(device, f"publikacja MQTT nie powiodła się ({exc})") from exc
         log.debug("MQTT -> %s: %s", topic, body)
 
 

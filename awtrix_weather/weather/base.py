@@ -24,6 +24,7 @@ class CurrentWeather:
     temperature: float
     condition: str
     pressure_hpa: float | None = None
+    is_day: bool = True
 
 
 @dataclass
