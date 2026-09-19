@@ -1,9 +1,19 @@
-"""Spina dane pogodowe/astronomiczne w payload JSON, jaki AWTRIX oczekuje
-(na custom app `<app_topic>` i drugi, uproszczony, `<app_topic>_sun`).
+"""Spina dane pogodowe/astronomiczne w payload JSON, jaki AWTRIX NG oczekuje
+(na pushed app `<app_topic>` i drugi, uproszczony, `<app_topic>_sun`).
 
 To jest odpowiednik sekcji `variables:` + `action:` z oryginalnego blueprintu,
 ale bez Home Assistant - dane biorą się z lokalnego dostawcy pogody (weather/)
 i lokalnych obliczeń astronomicznych (astro.py).
+
+Klucze payloadu są w dialekcie AWTRIX NG (patrz
+https://blueforcer.github.io/awtrix-ng/reference/payload/ i przewodnik
+migracji https://blueforcer.github.io/awtrix-ng/guides/migrating-from-awtrix3/):
+`color` -> `textColor`, `duration`(s) -> `durationMs`(ms), `pushIcon: 2` ->
+`iconMode: "push"`, `lifetime`(s)/`lifetimeMode: 1` -> `lifetimeMs`(ms)/
+`lifetimeExpiry: "mark"`, a komendy `draw` to teraz tablice
+(`["pixel", x, y, kolor]`, `["text", x, y, tekst, kolor]`,
+`["bitmap", x, y, w, h, dane]`) zamiast obiektów kluczowanych dwuliterowym
+kodem (`dp`/`dt`/`db`).
 """
 from __future__ import annotations
 
@@ -35,7 +45,7 @@ def _should_show_moon(cfg: AppConfig, moon_risen: bool, sun_elevation: float) ->
 
 def build_payloads(
     provider: WeatherProvider, cfg: AppConfig, metar_reader=None
-) -> tuple[dict, dict, float | None, str | None]:
+) -> tuple[dict, dict, float | None, str | None, str]:
     w = cfg.weather
     loc = cfg.location
 
@@ -129,10 +139,10 @@ def build_payloads(
         moon_cmd = draw_moon_command(moon_phase, x=moon_x, y=0)
 
     # --- Linia prognozy (kolorowe kropki wg temperatury) ---
-    draw: list[dict] = []
+    draw: list[list] = []
     for hour, point in enumerate(forecast[: w.hours_to_show]):
         color = interpolate_color(w.color_matrix, point.temperature) or "#FFFFFF"
-        draw.append({"dp": [8 + hour, 7, color]})
+        draw.append(["pixel", 8 + hour, 7, color])
 
     # --- Aktualna temperatura (tekst) ---
     text_available_width = 16 if show_moon else 24
@@ -142,7 +152,7 @@ def build_payloads(
         "temp=%s (units=%s) -> kolor tekstu=%s | warunek=%s -> ikona=%s",
         temp_value, w.units, text_color, current_condition, icon,
     )
-    draw.append({"dt": [text_x, 1, temp_text, text_color]})
+    draw.append(["text", text_x, 1, temp_text, text_color])
 
     if moon_cmd:
         draw.append(moon_cmd)
@@ -150,12 +160,16 @@ def build_payloads(
     main_payload: dict = {
         "draw": draw,
         "icon": icon,
-        "duration": w.message_duration_forecast,
-        "pushIcon": 2,
-        "lifetime": 120,
-        "lifetimeMode": 1,
-        "weather": current_condition,
+        "durationMs": w.message_duration_forecast * 1000,
+        "iconMode": "push",
+        "lifetimeMs": 120_000,
+        "lifetimeExpiry": "mark",
     }
+    # UWAGA: AWTRIX NG waliduje payload ściśle - appka ma dokładnie 40
+    # zdefiniowanych kluczy najwyższego poziomu, każdy inny klucz (np. dawne
+    # `"weather": current_condition`, używane tu tylko do logowania) kończy
+    # się błędem 422 validationFailed. Warunek pogodowy zwracamy więc osobno
+    # (5. element krotki), zamiast wpychać go do payloadu.
     if w.show_overlay:
         overlay = OVERLAY_BY_CONDITION.get(current_condition)
         if overlay:
@@ -163,4 +177,10 @@ def build_payloads(
 
     sun_payload = sun_info.payload if sun_info.payload else {}
 
-    return main_payload, sun_payload, weather_data.current.pressure_hpa, metar_wx_description
+    return (
+        main_payload,
+        sun_payload,
+        weather_data.current.pressure_hpa,
+        metar_wx_description,
+        current_condition,
+    )

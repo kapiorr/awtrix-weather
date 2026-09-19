@@ -1,14 +1,24 @@
 """Sprawdzenie na starcie, czy skonfigurowane ikony (`weather.icons`) faktycznie
 są wgrane na AWTRIX-ie, żeby zamiast animowanej ikony nie wyskoczył pusty kwadrat.
 
-Działa tylko dla transportu `http` (mamy wtedy adres IP urządzenia). AWTRIX3
-udostępnia listing plików pod tym samym adresem co wbudowany file manager
-(http://<ip>/edit -> GET /edit?list=/ICONS), więc z tego korzystamy.
+Działa tylko dla transportu `http` (mamy wtedy adres IP urządzenia). W
+odróżnieniu od AWTRIX 3 (gdzie listing plików nie był formalnie
+udokumentowany i trzeba było zgadywać endpoint), AWTRIX NG ma to w oficjalnym
+API v1:
 
-To jest "best effort": format odpowiedzi nie jest formalnie udokumentowany w
-API AWTRIX3, więc jeśli parsowanie się nie powiedzie albo endpoint nie
-odpowie tak jak oczekujemy, tylko logujemy ostrzeżenie i NIE przerywamy
-startu aplikacji - sama wysyłka pogody działa niezależnie od tej walidacji.
+    GET /api/v1/files?dir=/ICONS
+    -> {"files": [{"name": "w-sunny.gif", "size": 1234}, ...],
+        "usedBytes": ..., "totalBytes": ...}
+
+(patrz https://blueforcer.github.io/awtrix-ng/guides/icons/#list-and-delete
+oraz https://blueforcer.github.io/awtrix-ng/reference/http/#files). Listing
+katalogu, który jeszcze nie istnieje, zwraca 200 z pustą listą `files`, nie
+404 - traktujemy to więc po prostu jako "zero ikon wgranych".
+
+To nadal jest "best effort": jeśli zapytanie się nie powiedzie z innego
+powodu (urządzenie offline, stary firmware itp.), tylko logujemy ostrzeżenie
+i NIE przerywamy startu aplikacji - sama wysyłka pogody działa niezależnie
+od tej walidacji.
 
 Ikony podane jako liczby (np. wbudowane ID LaMetric używane przy podmianie
 ikony `clear-night` na fazę księżyca) są pomijane - AWTRIX potrafi je pobrać
@@ -32,10 +42,14 @@ def _icon_basename(raw_name: str) -> str:
     return name
 
 
-def _try_list_endpoint(url: str, timeout: float) -> list | None:
+def fetch_device_icon_names(base_url: str, timeout: float) -> set[str] | None:
+    """Zwraca zbiór nazw ikon (bez rozszerzenia) wgranych na urządzeniu w
+    /ICONS, albo None jeśli zapytanie się nie powiodło (urządzenie
+    nieosiągalne, nieoczekiwana odpowiedź...)."""
+    url = f"{base_url}/api/v1/files"
     try:
-        resp = requests.get(url, timeout=timeout)
-    except Exception as exc:
+        resp = requests.get(url, params={"dir": "/ICONS"}, timeout=timeout)
+    except requests.RequestException as exc:
         log.debug("Błąd zapytania %s: %s", url, exc)
         return None
     if resp.status_code != 200:
@@ -49,44 +63,20 @@ def _try_list_endpoint(url: str, timeout: float) -> list | None:
             url, resp.headers.get("Content-Type"), resp.text[:120],
         )
         return None
-    if not isinstance(data, list):
-        log.debug("%s zwrócił JSON, ale nie listę: %r", url, type(data))
-        return None
-    return data
 
-
-def fetch_device_icon_names(base_url: str, timeout: float) -> set[str] | None:
-    """Zwraca zbiór nazw ikon (bez rozszerzenia) wgranych na urządzeniu,
-    albo None jeśli nie udało się tego ustalić (np. inna wersja firmware).
-
-    Format listingu plików nie jest formalnie udokumentowany w API AWTRIX3,
-    więc próbujemy po kolei kilka wariantów spotykanych w firmware opartych
-    na ESPAsyncWebServer. WAŻNE: ukośnik w wartości `dir=`/`list=` musi
-    zostać w URL dosłownie jako "/", NIE zakodowany jako "%2F" - część
-    firmware'ów AWTRIX-a nie dekoduje go z powrotem i wtedy dostajemy zwykłą
-    stronę HTML zamiast JSON. Dlatego budujemy URL ręcznie, bez `params=`."""
-    attempts = [
-        f"{base_url}/list?dir=/ICONS",
-        f"{base_url}/edit?list=/ICONS",
-    ]
-
-    data = None
-    for url in attempts:
-        data = _try_list_endpoint(url, timeout)
-        if data is not None:
-            break
-
-    if data is None:
+    files = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(files, list):
+        log.debug("%s zwrócił nieoczekiwany kształt JSON (brak listy 'files'): %r", url, data)
         return None
 
     names: set[str] = set()
-    for entry in data:
-        if isinstance(entry, str):
-            names.add(_icon_basename(entry))
-        elif isinstance(entry, dict):
-            raw = entry.get("name") or entry.get("path") or entry.get("file")
+    for entry in files:
+        if isinstance(entry, dict):
+            raw = entry.get("name")
             if isinstance(raw, str):
                 names.add(_icon_basename(raw))
+        elif isinstance(entry, str):
+            names.add(_icon_basename(entry))
     return names
 
 
@@ -115,9 +105,9 @@ def validate_icons(cfg: AppConfig) -> dict[str, list[str]]:
         available = fetch_device_icon_names(base_url, cfg.awtrix.http.timeout)
         if available is None:
             log.warning(
-                "%s: nie udało się zweryfikować wgranych ikon (żaden ze znanych endpointów "
-                "listingu plików nie zadziałał - uruchom z -v/LOG_LEVEL=DEBUG, żeby zobaczyć "
-                "surowe odpowiedzi urządzenia) - sprawdź ręcznie w web UI urządzenia.",
+                "%s: nie udało się zweryfikować wgranych ikon (GET /api/v1/files nie "
+                "odpowiedział jak oczekiwano - uruchom z -v/LOG_LEVEL=DEBUG, żeby "
+                "zobaczyć surową odpowiedź urządzenia) - sprawdź ręcznie w web UI urządzenia.",
                 device,
             )
             continue

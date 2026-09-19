@@ -132,13 +132,15 @@ def build_alert_payload(warnings: list[Warning], message_duration: int, now: dat
         return {}
 
     color = LEVEL_COLORS.get(top.level, DEFAULT_COLOR)
-    text = f"{top.phenomenon_name} /{top.level}" if top.phenomenon_name else f"Ostrzeżenie /{top.level}"
+    # Poziom (1/2/3) jest już przekazany kolorem tekstu (LEVEL_COLORS) - nie
+    # dublujemy go w treści jako "/1"/"/2"/"/3".
+    text = top.phenomenon_name if top.phenomenon_name else "Ostrzeżenie"
 
     return {
         "text": text,
-        "color": color,
-        "duration": message_duration,
-        "pushIcon": 2,
-        "lifetime": 120,
-        "lifetimeMode": 1,
+        "textColor": color,
+        "durationMs": message_duration * 1000,
+        "iconMode": "push",
+        "lifetimeMs": 120_000,
+        "lifetimeExpiry": "mark",
     }

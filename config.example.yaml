@@ -80,7 +80,7 @@ sun:
 
 pressure:
   enabled: false             # ustaw true, żeby włączyć osobną appkę z ciśnieniem
-  app_topic: "jeef_pressure"  # nazwa custom app na AWTRIX
+  app_topic: "jeef_pressure"  # nazwa pushed appki na AWTRIX (musi pasować do [A-Za-z0-9_-]{1,32})
   trend_window_hours: 3        # porównanie z odczytem sprzed ilu godzin
   message_duration: 30         # sekundy wyświetlania w rotacji AWTRIX
   low_hpa: 1000                # poniżej tego -> kolor low_color
@@ -95,7 +95,7 @@ awtrix:
   devices:
     # transport: http -> adresy IP/hostname AWTRIX-ów
     - "192.168.1.50"
-    # transport: mqtt -> bazowe topiki MQTT urządzeń, np. "awtrix_abcdef"
+    # transport: mqtt -> bazowe prefiksy MQTT urządzeń (System -> MQTT -> Prefix), np. "awtrixNG"
   http:
     port: 80
     timeout: 5

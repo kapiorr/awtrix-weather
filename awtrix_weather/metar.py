@@ -115,9 +115,9 @@ def build_wx_payload(wx_description: str | None, message_duration: int) -> dict:
         return {}
     return {
         "text": wx_description,
-        "color": "#F2A93B",  # bursztynowy - wizualnie "ostrzegawczy"
-        "duration": message_duration,
-        "pushIcon": 2,
-        "lifetime": 120,
-        "lifetimeMode": 1,
+        "textColor": "#F2A93B",  # bursztynowy - wizualnie "ostrzegawczy"
+        "durationMs": message_duration * 1000,
+        "iconMode": "push",
+        "lifetimeMs": 120_000,
+        "lifetimeExpiry": "mark",
     }

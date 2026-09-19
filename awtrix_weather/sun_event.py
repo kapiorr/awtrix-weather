@@ -43,17 +43,17 @@ def compute_sun_event(
             display_text = f"{remaining_minutes} min"
         else:
             display_text = [
-                {"t": str(hours), "c": "#ffffff"},
-                {"t": "h", "c": "#9c9d97"},
-                {"t": str(remaining_minutes), "c": "#ffffff"},
-                {"t": "m", "c": "#9c9d97"},
+                {"text": str(hours), "color": "#ffffff"},
+                {"text": "h", "color": "#9c9d97"},
+                {"text": str(remaining_minutes), "color": "#ffffff"},
+                {"text": "m", "color": "#9c9d97"},
             ]
 
     icon = icon_sunrise if event == "sunrise" else icon_sunset
 
     payload = None
     if show_rise_set and event_minute_threshold >= minutes_until:
-        payload = {"icon": icon, "text": display_text, "duration": message_duration}
+        payload = {"icon": icon, "text": display_text, "durationMs": message_duration * 1000}
 
     return SunEventInfo(
         event=event,

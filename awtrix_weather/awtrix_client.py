@@ -1,13 +1,19 @@
-"""Wysyłka payloadu do AWTRIX - dwa warianty transportu:
+"""Wysyłka payloadu do AWTRIX NG - dwa warianty transportu:
 
-- http: bezpośrednio POST na lokalne API urządzenia (bez brokera MQTT):
-  POST http://<ip>:<port>/api/custom?name=<app>   (Blueforcer AWTRIX3 HTTP API)
-- mqtt: publikacja na broker, tak jak w oryginalnym blueprincie HA:
-  <device_topic>/custom/<app>
+- http: bezpośrednio na lokalne API v1 urządzenia (bez brokera MQTT):
+    utworzenie/aktualizacja appki:  PUT  http://<ip>/api/v1/apps/pushed/<app>
+    usunięcie appki:                DELETE http://<ip>/api/v1/apps/<app>
+  (AWTRIX NG, w odróżnieniu od AWTRIX 3, NIE kasuje appki pustym/`{}` body
+  wysłanym na PUT przez HTTP - to teraz osobny endpoint DELETE, patrz
+  https://blueforcer.github.io/awtrix-ng/reference/payload/#pushed-apps).
+- mqtt: publikacja na broker, nowe drzewo tematów AWTRIX NG:
+    <device_prefix>/cmd/apps/pushed/<app>
+  Na MQTT usuwanie pustym payloadem/`{}` nadal działa tak jak w AWTRIX 3.
 
 `devices` w konfiguracji oznacza co innego w zależności od transportu:
   http -> adresy IP/hostname urządzeń
-  mqtt -> bazowe topiki MQTT urządzeń (np. "awtrix_abcdef")
+  mqtt -> bazowe prefiksy MQTT urządzeń (np. "awtrix_abcdef", ustawione w
+          System -> MQTT -> Prefix na urządzeniu)
 """
 from __future__ import annotations
 
@@ -43,7 +49,11 @@ class AwtrixClient(ABC):
     def disconnect(self) -> None: ...
 
     @abstractmethod
-    def send(self, device: str, app_name: str, payload: dict) -> None: ...
+    def send(self, device: str, app_name: str, payload: dict) -> None:
+        """Wysyła/aktualizuje appkę `app_name`. Pusty payload ({}) KASUJE
+        appkę (na HTTP realizowane jako osobne wywołanie DELETE, na MQTT
+        jako publikacja pustego payloadu - patrz moduł docstring)."""
+        ...
 
 
 class HttpAwtrixClient(AwtrixClient):
@@ -57,13 +67,19 @@ class HttpAwtrixClient(AwtrixClient):
     def disconnect(self) -> None:
         self._session.close()
 
-    def send(self, device: str, app_name: str, payload: dict) -> None:
+    def _base_url(self, device: str) -> str:
         scheme = "https" if self.cfg.http.use_https else "http"
-        url = f"{scheme}://{device}:{self.cfg.http.port}/api/custom"
+        return f"{scheme}://{device}:{self.cfg.http.port}"
+
+    def send(self, device: str, app_name: str, payload: dict) -> None:
+        if not payload:
+            self._delete(device, app_name)
+            return
+
+        url = f"{self._base_url(device)}/api/v1/apps/pushed/{app_name}"
         try:
-            resp = self._session.post(
+            resp = self._session.put(
                 url,
-                params={"name": app_name},
                 data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 timeout=self.cfg.http.timeout,
@@ -74,8 +90,39 @@ class HttpAwtrixClient(AwtrixClient):
         except requests.exceptions.Timeout as exc:
             raise AwtrixUnreachableError(device, f"timeout ({self.cfg.http.timeout}s)") from exc
         except requests.exceptions.HTTPError as exc:
-            raise AwtrixUnreachableError(device, f"HTTP {resp.status_code}") from exc
-        log.debug("HTTP -> %s (%s): %s", url, app_name, payload)
+            raise AwtrixUnreachableError(
+                device, f"HTTP {resp.status_code} ({_error_detail(resp)})"
+            ) from exc
+        log.debug("PUT -> %s: %s", url, payload)
+
+    def _delete(self, device: str, app_name: str) -> None:
+        url = f"{self._base_url(device)}/api/v1/apps/{app_name}"
+        try:
+            resp = self._session.delete(url, timeout=self.cfg.http.timeout)
+            # 404 = appki i tak już nie ma na urządzeniu (np. nigdy nie
+            # została wysłana w tym cyklu życia AWTRIX-a) - to nie błąd.
+            if resp.status_code not in (200, 404):
+                resp.raise_for_status()
+        except requests.exceptions.ConnectionError as exc:
+            raise AwtrixUnreachableError(device, "brak połączenia (offline? zły IP? sieć?)") from exc
+        except requests.exceptions.Timeout as exc:
+            raise AwtrixUnreachableError(device, f"timeout ({self.cfg.http.timeout}s)") from exc
+        except requests.exceptions.HTTPError as exc:
+            raise AwtrixUnreachableError(
+                device, f"HTTP {resp.status_code} ({_error_detail(resp)})"
+            ) from exc
+        log.debug("DELETE -> %s", url)
+
+
+def _error_detail(resp: requests.Response) -> str:
+    """AWTRIX NG odpowiada błędem jako {"error": {"code", "message", "field?"}}
+    - wyciągamy to do czytelnego loga zamiast gołego kodu HTTP."""
+    try:
+        err = resp.json().get("error", {})
+        field = f" pole={err['field']}" if err.get("field") else ""
+        return f"{err.get('code', '?')}: {err.get('message', '?')}{field}"
+    except Exception:
+        return resp.text[:200]
 
 
 class MqttAwtrixClient(AwtrixClient):
@@ -108,14 +155,16 @@ class MqttAwtrixClient(AwtrixClient):
         self.client.disconnect()
 
     def send(self, device: str, app_name: str, payload: dict) -> None:
-        topic = f"{device}/custom/{app_name}"
-        body = json.dumps(payload, ensure_ascii=False)
+        # AWTRIX NG: nowe drzewo tematów - custom/<app> -> cmd/apps/pushed/<app>.
+        # Pusty payload nadal kasuje appkę (bez zmian względem AWTRIX 3).
+        topic = f"{device}/cmd/apps/pushed/{app_name}"
+        body = json.dumps(payload, ensure_ascii=False) if payload else ""
         try:
             result = self.client.publish(topic, body, qos=0, retain=False)
             result.wait_for_publish(timeout=5)
         except (RuntimeError, ValueError) as exc:
             raise AwtrixUnreachableError(device, f"publikacja MQTT nie powiodła się ({exc})") from exc
-        log.debug("MQTT -> %s: %s", topic, body)
+        log.debug("MQTT -> %s: %s", topic, body or "(delete)")
 
 
 def create_client(cfg: AwtrixConfig) -> AwtrixClient:

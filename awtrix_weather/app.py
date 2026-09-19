@@ -92,16 +92,18 @@ def run(cfg: AppConfig) -> None:
             cycle_start = time.monotonic()
             unreachable: set[str] = set()
             try:
-                main_payload, sun_payload, pressure_hpa, metar_wx_description = build_payloads(
+                main_payload, sun_payload, pressure_hpa, metar_wx_description, current_condition = build_payloads(
                     provider, cfg, metar_reader
                 )
 
                 for device in cfg.awtrix.devices:
                     _send(client, device, cfg.awtrix.app_topic, main_payload, unreachable)
-                    # Wysyłamy ZAWSZE, nawet pusty payload ({}) - to jedyny sposób,
-                    # żeby AWTRIX skasował/wyczyścił appkę, gdy jesteśmy poza oknem
-                    # event_minute_threshold (inaczej zostaje ostatni komunikat na
-                    # zawsze, np. "zachód słońca" widoczny długo po zachodzie).
+                    # Wysyłamy ZAWSZE, nawet pusty payload ({}) - AwtrixClient.send()
+                    # zamienia to na skasowanie appki (HTTP: DELETE .../apps/<app>,
+                    # MQTT: pusty payload na tym samym topicu - patrz awtrix_client.py),
+                    # gdy jesteśmy poza oknem event_minute_threshold (inaczej zostaje
+                    # ostatni komunikat na zawsze, np. "zachód słońca" widoczny długo
+                    # po zachodzie).
                     _send(client, device, f"{cfg.awtrix.app_topic}_sun", sun_payload, unreachable)
 
                     if cfg.weather.metar_override.enabled and cfg.weather.metar_override.show_wx_alert:
@@ -142,7 +144,7 @@ def run(cfg: AppConfig) -> None:
                     "Zaktualizowano %s/%s urządzeń (weather=%s)%s",
                     ok_count,
                     len(cfg.awtrix.devices),
-                    main_payload.get("weather"),
+                    current_condition,
                     f" - nieosiągalne: {', '.join(sorted(unreachable))}" if unreachable else "",
                 )
             except Exception:

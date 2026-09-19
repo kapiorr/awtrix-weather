@@ -85,16 +85,16 @@ def build_pressure_payload(pressure_hpa: float, trend: str | None, cfg: Pressure
     trend_color = TREND_COLOR.get(trend, "#9c9d97")
 
     text_segments = [
-        {"t": str(round(pressure_hpa)), "c": number_color},
-        {"t": " H", "c": "#9c9d97"},
+        {"text": str(round(pressure_hpa)), "color": number_color},
+        {"text": " H", "color": "#9c9d97"},
     ]
     if symbol:
-        text_segments.append({"t": " " + symbol, "c": trend_color})
+        text_segments.append({"text": " " + symbol, "color": trend_color})
 
     return {
         "text": text_segments,
-        "duration": cfg.message_duration,
-        "pushIcon": 2,
-        "lifetime": 120,
-        "lifetimeMode": 1,
+        "durationMs": cfg.message_duration * 1000,
+        "iconMode": "push",
+        "lifetimeMs": 120_000,
+        "lifetimeExpiry": "mark",
     }

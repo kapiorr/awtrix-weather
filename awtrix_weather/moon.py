@@ -1,9 +1,14 @@
-"""Bitmapy faz księżyca do rysowania na matrycy AWTRIX (komenda "db":
-[x, y, szerokość, wysokość, tablica_kolorów]) oraz mapowanie fazy księżyca na
-wbudowane ikony AWTRIX (używane w trybie "clear-night + moon").
+"""Bitmapy faz księżyca do rysowania na matrycy AWTRIX (komenda draw
+"bitmap": ["bitmap", x, y, szerokość, wysokość, tablica_kolorów] w AWTRIX NG)
+oraz mapowanie fazy księżyca na wbudowane ikony AWTRIX (używane w trybie
+"clear-night + moon").
 
 Dane bitmap i ID ikon przepisane 1:1 z oryginalnego blueprintu jeeftor/HomeAssistant
-(awtrix_weatherflow.yaml), żeby wygląd na wyświetlaczu się nie zmienił.
+(awtrix_weatherflow.yaml), żeby wygląd na wyświetlaczu się nie zmienił. Same
+wartości kolorów (spakowane liczby całkowite RRGGBB) są nadal poprawną formą
+koloru w AWTRIX NG - patrz "packed integer" w
+https://blueforcer.github.io/awtrix-ng/reference/visuals/#colors - zmienia się
+tylko kształt samej komendy draw (obiekt "db" -> tablica ["bitmap", ...]).
 """
 from __future__ import annotations
 
@@ -104,8 +109,8 @@ CLEAR_NIGHT_ICON_BY_PHASE: dict[str, str] = {
 }
 
 
-def draw_moon_command(phase: str, x: int = 22, y: int = 0) -> dict | None:
+def draw_moon_command(phase: str, x: int = 22, y: int = 0) -> list | None:
     bitmap = MOON_BITMAPS.get(phase)
     if bitmap is None:
         return None
-    return {"db": [x, y, 8, 8, bitmap]}
+    return ["bitmap", x, y, 8, 8, bitmap]

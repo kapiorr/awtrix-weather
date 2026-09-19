@@ -1,13 +1,16 @@
 """Pobiera brakujące ikony pogodowe wprost z repo jeeftor/HomeAssistant
 (ten sam zestaw, który pobierał oryginalny `upload_icon.sh`) i wgrywa je na
-AWTRIX przez ten sam endpoint, którego używa wbudowany web UI urządzenia.
+AWTRIX NG przez API v1 plików.
 
-Format uploadu potwierdzony na podstawie oryginalnego skryptu bash:
+Format uploadu (AWTRIX NG, patrz
+https://blueforcer.github.io/awtrix-ng/guides/icons/#upload-an-icon):
 
-    curl -X POST -F "file=@plik.gif;filename=/ICONS/w-sunny.gif" http://<ip>/edit
+    POST /api/v1/files?dir=/ICONS
+    multipart/form-data, dowolna nazwa pola - liczy się tylko nazwa pliku.
 
-Czyli: POST multipart na /edit, pole "file", a docelowa ścieżka na urządzeniu
-(`/ICONS/<nazwa>.gif`) jest podawana w nazwie pliku w multipart, nie w URL.
+Nazwa pliku (bez rozszerzenia) staje się ID ikony używanym w payloadzie
+(`"icon": "<id>"`). AWTRIX NG akceptuje GIF i JPEG w /ICONS - używamy GIF-a,
+tak jak oryginalny zestaw jeeftora.
 """
 from __future__ import annotations
 
@@ -44,11 +47,15 @@ def download_icon_gif(icon_name: str, timeout: float = 10.0) -> bytes | None:
 def upload_icon_to_device(
     base_url: str, icon_name: str, gif_bytes: bytes, timeout: float = 10.0
 ) -> bool:
-    device_filename = f"/ICONS/{icon_name}.gif"
+    """Wgrywa ikonę pod `/ICONS/<icon_name>.gif` przez API v1 AWTRIX NG.
+
+    Nazwa pola formularza jest dowolna - liczy się wyłącznie nazwa pliku
+    w multipart, bo to ona staje się nazwą (a więc i ID) ikony na urządzeniu."""
     try:
         resp = requests.post(
-            f"{base_url}/edit",
-            files={"file": (device_filename, gif_bytes, "image/gif")},
+            f"{base_url}/api/v1/files",
+            params={"dir": "/ICONS"},
+            files={"file": (f"{icon_name}.gif", gif_bytes, "image/gif")},
             timeout=timeout,
         )
         resp.raise_for_status()

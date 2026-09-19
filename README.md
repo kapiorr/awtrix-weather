@@ -1,5 +1,11 @@
 # AWTRIX Weather (w pełni standalone, bez Home Assistant)
 
+> **Firmware:** ta wersja mówi w dialekcie **AWTRIX NG** (nowy, przepisany od
+> zera firmware Blueforcera - inne endpointy, inne nazwy kluczy JSON niż
+> w starszym AWTRIX 3). Jeśli Twoje urządzenie wciąż ma firmware AWTRIX 3,
+> to NIE zadziała bez przepisania z powrotem - zobacz oficjalny przewodnik
+> migracji: <https://blueforcer.github.io/awtrix-ng/guides/migrating-from-awtrix3/>.
+
 > **Pochodzenie projektu:** to konwersja świetnego blueprintu Home Assistant
 > [`awtrix_weatherflow.yaml`](https://github.com/jeeftor/HomeAssistant/blob/master/blueprints/automation/awtrix_weatherflow.yaml)
 > autorstwa [**jeeftor**](https://github.com/jeeftor) na samodzielny skrypt
@@ -17,7 +23,7 @@ ciśnienie i ostrzeżenia meteorologiczne są liczone/pobierane bezpośrednio w 
 - **księżyc i słońce** - liczone lokalnie biblioteką `ephem` na podstawie Twoich współrzędnych (bez żadnego zewnętrznego API do astronomii),
 - **ciśnienie z trendem** (opcjonalnie) - osobna appka pokazująca aktualne hPa + strzałkę rośnie/spada/stabilnie,
 - **ostrzeżenia meteorologiczne IMGW** (opcjonalnie) - osobna appka dla Twojego powiatu, kolor wg oficjalnej skali 1/2/3,
-- **AWTRIX** - domyślnie wysyłka przez **lokalne HTTP API urządzenia** (`POST http://<ip>/api/custom?name=...`), bez brokera MQTT. MQTT wciąż jest dostępny jako opcja (`awtrix.transport: mqtt`), jeśli wolisz go zostawić.
+- **AWTRIX** - domyślnie wysyłka przez **lokalne HTTP API v1 urządzenia** (`PUT http://<ip>/api/v1/apps/pushed/<app>`), bez brokera MQTT. MQTT wciąż jest dostępny jako opcja (`awtrix.transport: mqtt`), jeśli wolisz go zostawić.
 
 Skrypt w pętli (domyślnie co 60 s):
 1. pobiera aktualną pogodę + prognozę godzinową od wybranego dostawcy (opcjonalnie nadpisując temp/ciśnienie realnym METAR-em),
@@ -311,7 +317,7 @@ pressure:
   enabled: true
 ```
 
-Efekt: osobna custom app na AWTRIX (domyślnie `jeef_pressure`) pokazująca
+Efekt: osobna pushed appka na AWTRIX (domyślnie `jeef_pressure`) pokazująca
 aktualne ciśnienie + strzałkę trendu, jako zwykły tekst (`"1013 H ^"`) - `H`
 zamiast `hPa`, żeby było krócej i zostało miejsce na strzałkę, gdy dane
 trendu są już dostępne. Jeśli tekst i tak nie zmieści się na 32px ekranu,
@@ -356,8 +362,8 @@ pressure:
 ## Walidacja i automatyczne wgrywanie ikon
 
 Przy każdym starcie (transport `http`) skrypt pyta urządzenie o listę plików w
-folderze `/ICONS` (ten sam endpoint, którego używa wbudowany file manager pod
-`http://<ip>/edit`) i porównuje ją z ikonami wpisanymi w `weather.icons`.
+folderze `/ICONS` przez udokumentowane API AWTRIX NG (`GET /api/v1/files?dir=/ICONS`)
+i porównuje ją z ikonami wpisanymi w `weather.icons`.
 
 Domyślnie tylko o tym informuje w logu:
 
@@ -369,8 +375,9 @@ Jeśli ustawisz `awtrix.auto_upload_missing_icons: true`, brakujące ikony
 zostaną **automatycznie pobrane i wgrane** - z tego samego źródła, z którego
 korzystał oryginalny `upload_icon.sh` z repo jeeftor
 (`icons/weather/*.gif` w [jeeftor/HomeAssistant](https://github.com/jeeftor/HomeAssistant)),
-tym samym sposobem co ten skrypt: `POST /edit` (multipart, pole `file`, docelowa
-ścieżka `/ICONS/<nazwa>.gif` podana w nazwie pliku).
+przez udokumentowany endpoint uploadu AWTRIX NG: `POST /api/v1/files?dir=/ICONS`
+(multipart, dowolna nazwa pola - liczy się tylko nazwa pliku w multipart,
+która staje się ID ikony na urządzeniu, np. `w-sunny.gif` -> `"icon": "w-sunny"`).
 
 Możesz to też zrobić ręcznie, jednorazowo, bez uruchamiania całej aplikacji:
 
@@ -384,13 +391,15 @@ Uwagi:
 - Działa tylko dla domyślnego zestawu ikon `w-*` (taki jest w
   `config.example.yaml`) - jeśli wpiszesz własne nazwy ikon, których nie ma w
   repo jeeftor, dostaniesz warning "wgraj ją ręcznie".
-- Sam listing `/edit?list=` jest "best effort" - format nie jest formalnie
-  udokumentowany w API AWTRIX3. Jeśli się nie powiedzie, dostajesz jedno
-  ostrzeżenie i skrypt jedzie dalej normalnie - to nie blokuje wysyłki pogody.
+- Listing `GET /api/v1/files?dir=/ICONS` jest oficjalnie udokumentowanym
+  endpointem AWTRIX NG (w odróżnieniu od AWTRIX 3, gdzie trzeba było zgadywać
+  format). Jeśli mimo to zapytanie się nie powiedzie (urządzenie offline,
+  nieoczekiwana odpowiedź), dostajesz jedno ostrzeżenie i skrypt jedzie dalej
+  normalnie - to nie blokuje wysyłki pogody.
 - Numeryczne ID ikon (podmiana `clear-night` na fazę księżyca) nie są
   sprawdzane ani uploadowane - AWTRIX pobiera je sam na żądanie z LaMetric.
 - Dla transportu `mqtt` walidacja/upload są pomijane (nie mamy adresu IP) -
-  użyj oryginalnego `upload_icon.sh` albo web UI urządzenia.
+  użyj web UI urządzenia (zakładka Icons, albo file manager) albo AWTRIX Hub.
 - Wyłączenie samej walidacji: `awtrix.check_icons_on_start: false`.
 
 ## Uruchomienie z logami DEBUG (`-v`) w Dockerze
