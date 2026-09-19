@@ -63,7 +63,11 @@ class PressureTrendTracker:
         return "rising" if delta > 0 else "falling"
 
 
-TREND_SYMBOL = {"rising": "^", "falling": "v", "steady": "="}
+# Znaki dobrane empirycznie tak, żeby renderowały się w tym samym rozmiarze
+# w wbudowanej czcionce AWTRIX - "^"/"v" różniły się wizualnie wielkością
+# (daszek vs pełna mała litera), "+"/"-" są tej samej klasy znaków (proste
+# operatory) i wyszły identycznej wielkości na realnym urządzeniu.
+TREND_SYMBOL = {"rising": "+", "falling": "-", "steady": "="}
 TREND_COLOR = {"rising": "#5ECC62", "falling": "#E85C5C", "steady": "#9c9d97"}
 
 
