@@ -23,7 +23,7 @@ from .astro import get_moon_state, get_sun_state
 from .color import interpolate_color
 from .config import AppConfig
 from .icons import OVERLAY_BY_CONDITION
-from .moon import CLEAR_NIGHT_ICON_BY_PHASE, draw_moon_command
+from .moon import draw_moon_command
 from .sun_event import compute_sun_event
 from .text import center_text_x
 from .weather.base import WeatherData, WeatherProvider
@@ -120,12 +120,20 @@ def build_payloads(
     use_moon_clear_night = cfg.moon.enabled and cfg.moon.use_moon_for_clear_night
     use_moon_sunny_night = cfg.moon.enabled and cfg.moon.use_moon_for_sunny_night
 
+    # Podmiana "clear-night -> faza księżyca" NIE ustawia numerycznego ID
+    # ikony (AWTRIX NG nie dociąga ikon z sieci - patrz moon.py) - zamiast
+    # tego zostawiamy pusty slot ikony i zawsze (niezależnie od show_moon,
+    # które steruje tylko MAŁYM księżycem w rogu przy innych warunkach)
+    # rysujemy bitmapę księżyca w jego miejscu.
+    moon_replaces_icon = False
     if current_condition == "clear-night" and use_moon_clear_night and moon_phase:
-        icon = CLEAR_NIGHT_ICON_BY_PHASE.get(moon_phase, w.icons.get("clear-night", ""))
+        icon = ""
         moon_x = 0
+        moon_replaces_icon = True
     elif sun_next_event == "sunrise" and use_moon_sunny_night and current_condition == "sunny":
         icon = ""
         moon_x = 0
+        moon_replaces_icon = True
     else:
         icon = w.icons.get(current_condition, "")
         if not weather_data.current.is_day:
@@ -135,7 +143,7 @@ def build_payloads(
         moon_x = 23
 
     moon_cmd = None
-    if show_moon and moon_phase:
+    if moon_phase and (show_moon or moon_replaces_icon):
         moon_cmd = draw_moon_command(moon_phase, x=moon_x, y=0)
 
     # --- Linia prognozy (kolorowe kropki wg temperatury) ---

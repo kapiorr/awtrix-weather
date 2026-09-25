@@ -1,14 +1,24 @@
 """Bitmapy faz księżyca do rysowania na matrycy AWTRIX (komenda draw
-"bitmap": ["bitmap", x, y, szerokość, wysokość, tablica_kolorów] w AWTRIX NG)
-oraz mapowanie fazy księżyca na wbudowane ikony AWTRIX (używane w trybie
-"clear-night + moon").
+"bitmap": ["bitmap", x, y, szerokość, wysokość, tablica_kolorów] w AWTRIX NG).
 
-Dane bitmap i ID ikon przepisane 1:1 z oryginalnego blueprintu jeeftor/HomeAssistant
+Dane bitmap przepisane 1:1 z oryginalnego blueprintu jeeftor/HomeAssistant
 (awtrix_weatherflow.yaml), żeby wygląd na wyświetlaczu się nie zmienił. Same
 wartości kolorów (spakowane liczby całkowite RRGGBB) są nadal poprawną formą
 koloru w AWTRIX NG - patrz "packed integer" w
 https://blueforcer.github.io/awtrix-ng/reference/visuals/#colors - zmienia się
 tylko kształt samej komendy draw (obiekt "db" -> tablica ["bitmap", ...]).
+
+UWAGA: oryginalny blueprint (pod AWTRIX3) w trybie "clear-night + moon"
+podmieniał samą IKONĘ appki na numeryczne ID z biblioteki LaMetric (np.
+"2314" dla pełni), licząc na to, że AWTRIX sam dociągnie obrazek z sieci
+przy pierwszym użyciu. AWTRIX NG tego nie robi - sprawdzone wprost we
+firmware (src/media/IconRenderer.cpp): "icon" to zawsze TYLKO odczyt
+lokalnego pliku /ICONS/<id>.jpg, bez żadnego fallbacku sieciowego. Dlatego
+w tym rewrite'ie podmiana "clear-night -> faza księżyca" nie ustawia już
+numerycznego ID ikony w ogóle - zamiast tego render.py rysuje bitmapę
+księżyca bezpośrednio (draw_moon_command), dokładnie tym samym mechanizmem
+co mały księżyc w rogu przy innych warunkach pogodowych. Nic nie trzeba
+wgrywać ręcznie do /ICONS dla tej funkcji.
 """
 from __future__ import annotations
 
@@ -94,20 +104,6 @@ MOON_BITMAPS: dict[str, list[int]] = {
         0, 0, 3355443, 3355443, 14079702, 14079702, 0, 0,
     ],
 }
-
-# Faza księżyca -> ID wbudowanej ikony AWTRIX/LaMetric (używane, gdy warunek
-# pogodowy to "clear-night" i włączona jest opcja podmiany ikony na księżyc).
-CLEAR_NIGHT_ICON_BY_PHASE: dict[str, str] = {
-    "full_moon": "2314",
-    "waning_gibbous": "2315",
-    "last_quarter": "2316",
-    "waning_crescent": "2317",
-    "new_moon": "2318",
-    "waxing_crescent": "2319",
-    "first_quarter": "2320",
-    "waxing_gibbous": "2321",
-}
-
 
 def draw_moon_command(phase: str, x: int = 22, y: int = 0) -> list | None:
     bitmap = MOON_BITMAPS.get(phase)
