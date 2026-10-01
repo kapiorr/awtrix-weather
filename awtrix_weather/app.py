@@ -5,9 +5,11 @@ import time
 
 from .awtrix_client import AwtrixUnreachableError, create_client
 from .config import AppConfig
+from .http_api import StateStore
+from .http_api import start as start_http_api
 from .icon_check import validate_icons
 from .icon_upload import sync_missing_icons
-from .imgw_warnings import CachingImgwWarningsReader, build_alert_payload
+from .imgw_warnings import CachingImgwWarningsReader, build_alert_payload, filter_currently_active
 from .metar import CachingMetarReader, build_wx_payload
 from .pressure import PressureTrendTracker, build_pressure_payload
 from .render import build_payloads
@@ -70,6 +72,9 @@ def run(cfg: AppConfig) -> None:
             cfg.imgw_warnings.teryt, cfg.imgw_warnings.refresh_seconds
         )
 
+    state = StateStore()
+    http_server = start_http_api(cfg.http_api, state) if cfg.http_api.enabled else None
+
     try:
         if cfg.awtrix.check_icons_on_start:
             missing = validate_icons(cfg)
@@ -92,9 +97,20 @@ def run(cfg: AppConfig) -> None:
             cycle_start = time.monotonic()
             unreachable: set[str] = set()
             try:
-                main_payload, sun_payload, pressure_hpa, metar_wx_description, current_condition = build_payloads(
-                    provider, cfg, metar_reader
+                main_payload, sun_payload, pressure_hpa, metar_wx_description, current_condition, weather_data = (
+                    build_payloads(provider, cfg, metar_reader)
                 )
+                state.update_weather(weather_data, current_condition)
+
+                if metar_reader is not None:
+                    # metar_reader jest już odpytany wewnątrz build_payloads() -
+                    # CachingMetarReader cache'uje wg czasu, więc to drugie
+                    # wywołanie w tym samym cyklu nic nie pobiera z sieci,
+                    # tylko zwraca ten sam obiekt. Robimy to osobno tylko po
+                    # to, żeby mieć PEŁNY odczyt (temp/ciśnienie/zjawiska/raw)
+                    # do stanu API - build_payloads() zwraca na zewnątrz tylko
+                    # wyciąg (metar_wx_description) potrzebny do payloadu appki.
+                    state.update_metar(metar_reader.read())
 
                 for device in cfg.awtrix.devices:
                     _send(client, device, cfg.awtrix.app_topic, main_payload, unreachable)
@@ -119,6 +135,7 @@ def run(cfg: AppConfig) -> None:
                         pressure_payload = build_pressure_payload(pressure_hpa, trend, cfg.pressure)
                         for device in cfg.awtrix.devices:
                             _send(client, device, cfg.pressure.app_topic, pressure_payload, unreachable)
+                        state.update_pressure(pressure_hpa, trend)
                         log.debug("Ciśnienie: %.1f hPa, trend=%s", pressure_hpa, trend)
                     else:
                         log.warning(
@@ -132,6 +149,9 @@ def run(cfg: AppConfig) -> None:
                         alert_payload = build_alert_payload(warnings, cfg.imgw_warnings.message_duration)
                         for device in cfg.awtrix.devices:
                             _send(client, device, cfg.imgw_warnings.app_topic, alert_payload, unreachable)
+                        state.update_imgw(
+                            cfg.imgw_warnings.teryt, warnings, filter_currently_active(warnings)
+                        )
                     except Exception:
                         log.warning(
                             "Nie udało się pobrać ostrzeżeń IMGW dla %s - pomijam ten cykl",
@@ -160,3 +180,5 @@ def run(cfg: AppConfig) -> None:
         log.info("Zatrzymano (Ctrl+C)")
     finally:
         client.disconnect()
+        if http_server is not None:
+            http_server.shutdown()

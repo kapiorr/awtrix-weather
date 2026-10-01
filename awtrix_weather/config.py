@@ -116,6 +116,13 @@ class AwtrixConfig:
 
 
 @dataclass
+class HttpApiConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 9998
+
+
+@dataclass
 class AppConfig:
     location: LocationConfig
     weather: WeatherConfig
@@ -124,6 +131,7 @@ class AppConfig:
     pressure: PressureConfig
     imgw_warnings: ImgwWarningsConfig
     awtrix: AwtrixConfig
+    http_api: HttpApiConfig = field(default_factory=HttpApiConfig)
     poll_interval_seconds: int = 60
 
 
@@ -237,6 +245,13 @@ def load_config(path: str) -> AppConfig:
         auto_upload_missing_icons=bool(a_raw.get("auto_upload_missing_icons", False)),
     )
 
+    ha_raw = raw.get("http_api", {})
+    http_api = HttpApiConfig(
+        enabled=bool(ha_raw.get("enabled", False)),
+        host=str(ha_raw.get("host", "0.0.0.0")),
+        port=int(ha_raw.get("port", 9998)),
+    )
+
     return AppConfig(
         location=location,
         weather=weather,
@@ -245,5 +260,6 @@ def load_config(path: str) -> AppConfig:
         pressure=pressure,
         imgw_warnings=imgw_warnings,
         awtrix=awtrix,
+        http_api=http_api,
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
     )
