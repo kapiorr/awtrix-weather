@@ -13,5 +13,10 @@ services:
       # MQTT_PORT: "1883"
       # MQTT_USERNAME: ""
       # MQTT_PASSWORD: ""
+    ports:
+      # Tylko jeśli http_api.enabled: true w config.yaml (domyślnie false -
+      # wtedy nic w kontenerze nie nasłuchuje i to mapowanie jest nieszkodliwym
+      # no-opem, ale możesz je też po prostu zakomentować/usunąć).
+      - "9998:9998"
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
