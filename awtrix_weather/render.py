@@ -45,7 +45,7 @@ def _should_show_moon(cfg: AppConfig, moon_risen: bool, sun_elevation: float) ->
 
 def build_payloads(
     provider: WeatherProvider, cfg: AppConfig, metar_reader=None
-) -> tuple[dict, dict, float | None, str | None, str, WeatherData]:
+) -> tuple[dict, dict, float | None, str | None, str, WeatherData, dict | None]:
     w = cfg.weather
     loc = cfg.location
 
@@ -90,10 +90,12 @@ def build_payloads(
 
     moon_phase = None
     moon_risen = False
+    moon_altitude_deg = None
     if cfg.moon.enabled:
         moon_state = get_moon_state(loc.latitude, loc.longitude, loc.elevation)
         moon_phase = moon_state.phase_name
         moon_risen = moon_state.altitude_deg > 0
+        moon_altitude_deg = moon_state.altitude_deg
         log.info(
             "Księżyc: wysokość %.1f° (%s) | faza %s",
             moon_state.altitude_deg,
@@ -185,6 +187,20 @@ def build_payloads(
 
     sun_payload = sun_info.payload if sun_info.payload else {}
 
+    moon_info = None
+    if cfg.moon.enabled:
+        moon_info = {
+            "phase": moon_phase,
+            "risen": moon_risen,
+            "altitude_deg": moon_altitude_deg,
+            # Stała definicja "widoczny" wg trybu "night" (sun below horizon
+            # + moon above horizon) - NIEZALEŻNIE od tego, jak akurat jest
+            # ustawione moon.when_show w configu (to osobne info, nie to
+            # samo co show_moon niżej, które steruje faktycznym rysowaniem
+            # na AWTRIX i zależy od wybranego trybu).
+            "visible": sun_state.elevation_deg < 0 and moon_risen,
+        }
+
     return (
         main_payload,
         sun_payload,
@@ -192,4 +208,5 @@ def build_payloads(
         metar_wx_description,
         current_condition,
         weather_data,
+        moon_info,
     )

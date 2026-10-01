@@ -97,10 +97,18 @@ def run(cfg: AppConfig) -> None:
             cycle_start = time.monotonic()
             unreachable: set[str] = set()
             try:
-                main_payload, sun_payload, pressure_hpa, metar_wx_description, current_condition, weather_data = (
-                    build_payloads(provider, cfg, metar_reader)
-                )
+                (
+                    main_payload,
+                    sun_payload,
+                    pressure_hpa,
+                    metar_wx_description,
+                    current_condition,
+                    weather_data,
+                    moon_info,
+                ) = build_payloads(provider, cfg, metar_reader)
                 state.update_weather(weather_data, current_condition)
+                if moon_info is not None:
+                    state.update_moon(moon_info)
 
                 if metar_reader is not None:
                     # metar_reader jest już odpytany wewnątrz build_payloads() -
