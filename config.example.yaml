@@ -118,3 +118,23 @@ imgw_warnings:
   refresh_seconds: 900             # jak często pytać endpoint (darmowy, bez limitu, ale nie ma sensu częściej niż zmieniają się dane)
   app_topic: "jeef_weather_alert"
   message_duration: 20
+
+# Lokalny JSON API (odczyt na żywo stanu pogody/astronomii/METAR/IMGW/jakości
+# powietrza - własny dashboard, Home Assistant itp.). Nic nie wysyła, tylko
+# serwuje to, co już zostało pobrane w bieżącym cyklu - patrz README.
+http_api:
+  enabled: false
+  host: "0.0.0.0"     # na czym nasłuchiwać wewnątrz kontenera - zwykle zostaw 0.0.0.0
+  port: 9998           # pamiętaj o "ports: - 9998:9998" w docker-compose.yml, jeśli enabled: true
+
+# Jakość powietrza z miejskiego API Urzędu m.st. Warszawy
+# (dane.um.warszawa.pl - "Monitoring jakości powietrza"). Wymaga darmowej
+# rejestracji i tokenu. WYŁĄCZNIE do http_api (JSON) - nie ma appki na AWTRIX.
+air_quality:
+  enabled: false
+  token: ""                        # token z dane.um.warszawa.pl, albo zmienna środowiskowa UM_WARSZAWA_API_TOKEN
+  station_names:                   # dokładne nazwy stacji (pole "name" w odpowiedzi API) - uśredniane razem
+    - "Warszawa-Grochowska"
+    # - "Warszawa, ul. Chrościckiego"
+    # - "Warszawa-12815"
+  refresh_seconds: 1800             # jakość powietrza zmienia się wolno - 30 min w zupełności wystarczy
