@@ -123,6 +123,14 @@ class HttpApiConfig:
 
 
 @dataclass
+class AirQualityConfig:
+    enabled: bool = False
+    token: str = ""           # token API z dane.um.warszawa.pl (darmowa rejestracja)
+    station_names: list[str] = field(default_factory=list)  # dokladne nazwy stacji, np. ["Warszawa-Grochowska", ...]
+    refresh_seconds: int = 1800  # jakosc powietrza zmienia sie wolno - 30 min w zupelnosci wystarczy
+
+
+@dataclass
 class AppConfig:
     location: LocationConfig
     weather: WeatherConfig
@@ -132,6 +140,7 @@ class AppConfig:
     imgw_warnings: ImgwWarningsConfig
     awtrix: AwtrixConfig
     http_api: HttpApiConfig = field(default_factory=HttpApiConfig)
+    air_quality: AirQualityConfig = field(default_factory=AirQualityConfig)
     poll_interval_seconds: int = 60
 
 
@@ -252,6 +261,14 @@ def load_config(path: str) -> AppConfig:
         port=int(ha_raw.get("port", 9998)),
     )
 
+    aq_raw = raw.get("air_quality", {})
+    air_quality = AirQualityConfig(
+        enabled=bool(aq_raw.get("enabled", False)),
+        token=_env("UM_WARSZAWA_API_TOKEN", aq_raw.get("token", "")),
+        station_names=list(aq_raw.get("station_names", [])),
+        refresh_seconds=int(aq_raw.get("refresh_seconds", 1800)),
+    )
+
     return AppConfig(
         location=location,
         weather=weather,
@@ -261,5 +278,6 @@ def load_config(path: str) -> AppConfig:
         imgw_warnings=imgw_warnings,
         awtrix=awtrix,
         http_api=http_api,
+        air_quality=air_quality,
         poll_interval_seconds=int(raw.get("poll_interval_seconds", 60)),
     )

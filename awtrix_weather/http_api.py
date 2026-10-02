@@ -74,6 +74,9 @@ class StateStore:
             {"teryt": teryt, "active": active, "all_for_teryt": all_warnings},
         )
 
+    def update_air_quality(self, readings: list, aggregated) -> None:
+        self._set("air_quality", {"stations": list(readings), "aggregated": aggregated})
+
     def update_pressure(self, hpa: float, trend: str | None) -> None:
         self._set("pressure", {"hpa": hpa, "trend": trend})
 

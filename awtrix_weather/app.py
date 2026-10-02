@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
+from .air_quality import CachingAirQualityReader, average_readings
 from .awtrix_client import AwtrixUnreachableError, create_client
 from .config import AppConfig
 from .http_api import StateStore
@@ -70,6 +71,12 @@ def run(cfg: AppConfig) -> None:
     if cfg.imgw_warnings.enabled:
         warnings_reader = CachingImgwWarningsReader(
             cfg.imgw_warnings.teryt, cfg.imgw_warnings.refresh_seconds
+        )
+
+    air_quality_reader = None
+    if cfg.air_quality.enabled:
+        air_quality_reader = CachingAirQualityReader(
+            cfg.air_quality.token, cfg.air_quality.station_names, cfg.air_quality.refresh_seconds
         )
 
     state = StateStore()
@@ -166,6 +173,22 @@ def run(cfg: AppConfig) -> None:
                         log.warning(
                             "Nie udało się pobrać ostrzeżeń IMGW dla %s - pomijam ten cykl",
                             cfg.imgw_warnings.teryt,
+                            exc_info=True,
+                        )
+
+                if air_quality_reader is not None:
+                    try:
+                        readings, missing = air_quality_reader.read()
+                        if readings:
+                            aggregated = average_readings(readings, missing)
+                            state.update_air_quality(readings, aggregated)
+                        # readings puste (zle nazwy stacji / chwilowy blad) -
+                        # nic nie aktualizujemy, zostaje poprzedni stan ze
+                        # swoim updated_at (ten sam duch co reszta readerow).
+                    except Exception:
+                        log.warning(
+                            "Nie udało się pobrać jakości powietrza dla stacji %s - pomijam ten cykl",
+                            ", ".join(cfg.air_quality.station_names),
                             exc_info=True,
                         )
 
