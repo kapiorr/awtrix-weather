@@ -62,6 +62,9 @@ class StateStore:
     def update_moon(self, moon_info: dict) -> None:
         self._set("moon", dict(moon_info))
 
+    def update_sun(self, sun_data: dict) -> None:
+        self._set("sun", dict(sun_data))
+
     def update_metar(self, reading) -> None:
         self._set("metar", {"reading": reading})
 

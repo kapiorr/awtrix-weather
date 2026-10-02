@@ -18,8 +18,9 @@ kodem (`dp`/`dt`/`db`).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
-from .astro import get_moon_state, get_sun_state
+from .astro import get_moon_state, get_moon_wi_icon, get_sun_state
 from .color import interpolate_color
 from .config import AppConfig
 from .icons import OVERLAY_BY_CONDITION
@@ -45,7 +46,7 @@ def _should_show_moon(cfg: AppConfig, moon_risen: bool, sun_elevation: float) ->
 
 def build_payloads(
     provider: WeatherProvider, cfg: AppConfig, metar_reader=None
-) -> tuple[dict, dict, float | None, str | None, str, WeatherData, dict | None]:
+) -> tuple[dict, dict, float | None, str | None, str, WeatherData, dict | None, dict]:
     w = cfg.weather
     loc = cfg.location
 
@@ -199,7 +200,23 @@ def build_payloads(
             # samo co show_moon niżej, które steruje faktycznym rysowaniem
             # na AWTRIX i zależy od wybranego trybu).
             "visible": sun_state.elevation_deg < 0 and moon_risen,
+            # Dokładniejsza (28-stopniowa) nazwa ikony do użycia na www -
+            # NIE wpływa na "icon"/"draw" wysyłane do AWTRIX (tam nadal
+            # liczy się tylko phase_name wyżej, 8 kubełków).
+            "wi_icon": get_moon_wi_icon(datetime.utcnow()),
+            "next_rising": moon_state.next_rising,
+            "next_setting": moon_state.next_setting,
         }
+
+    # Surowe dane astronomiczne Słońca do API - NIE mylić z `sun_payload`
+    # wyżej (to, co faktycznie leci do appki AWTRIX, uproszczone pod próg
+    # event_minute_threshold). Liczone zawsze (bez gate'u na cfg.moon.enabled
+    # - to dotyczy tylko sekcji moon).
+    sun_data = {
+        "elevation_deg": sun_state.elevation_deg,
+        "next_rising": sun_state.next_rising,
+        "next_setting": sun_state.next_setting,
+    }
 
     return (
         main_payload,
@@ -209,4 +226,5 @@ def build_payloads(
         current_condition,
         weather_data,
         moon_info,
+        sun_data,
     )

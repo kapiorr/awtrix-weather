@@ -105,10 +105,12 @@ def run(cfg: AppConfig) -> None:
                     current_condition,
                     weather_data,
                     moon_info,
+                    sun_data,
                 ) = build_payloads(provider, cfg, metar_reader)
                 state.update_weather(weather_data, current_condition)
                 if moon_info is not None:
                     state.update_moon(moon_info)
+                state.update_sun(sun_data)
 
                 if metar_reader is not None:
                     # metar_reader jest już odpytany wewnątrz build_payloads() -

@@ -22,6 +22,22 @@ MOON_PHASE_NAMES = [
     "waning_crescent",
 ]
 
+# 28 nazw klas = font "Weather Icons" (erikflowers/weather-icons, SIL OFL),
+# jedna ikona na każdy dzień 28-dniowego cyklu księżycowego. UŻYWANE
+# WYŁĄCZNIE do API (render.py -> moon_info["wi_icon"]) - wybór bitmapy na
+# AWTRIX nadal opiera się tylko o MOON_PHASE_NAMES (8 kubełków) wyżej.
+MOON_WI_ICON_NAMES = (
+    ["wi-moon-new"]
+    + [f"wi-moon-waxing-crescent-{i}" for i in range(1, 7)]
+    + ["wi-moon-first-quarter"]
+    + [f"wi-moon-waxing-gibbous-{i}" for i in range(1, 7)]
+    + ["wi-moon-full"]
+    + [f"wi-moon-waning-gibbous-{i}" for i in range(1, 7)]
+    + ["wi-moon-third-quarter"]
+    + [f"wi-moon-waning-crescent-{i}" for i in range(1, 7)]
+)
+assert len(MOON_WI_ICON_NAMES) == 28
+
 
 @dataclass
 class SunState:
@@ -34,6 +50,8 @@ class SunState:
 class MoonState:
     altitude_deg: float
     phase_name: str
+    next_rising: datetime  # UTC
+    next_setting: datetime  # UTC
 
 
 def _make_observer(lat: float, lon: float, elevation_m: float = 0.0) -> ephem.Observer:
@@ -72,10 +90,36 @@ def _moon_phase_name(dt: datetime) -> str:
     return MOON_PHASE_NAMES[index]
 
 
+def get_moon_wi_icon(dt: datetime) -> str:
+    """Nazwa klasy ikony z fonta Weather Icons (jedna z 28, patrz
+    MOON_WI_ICON_NAMES) - wyłącznie do API, do użycia na stronie www."""
+    ed = ephem.Date(dt)
+    prev_new = ephem.previous_new_moon(ed)
+    next_new = ephem.next_new_moon(ed)
+    cycle_length = float(next_new) - float(prev_new)
+    lunar_age = float(ed) - float(prev_new)
+    fraction = (lunar_age / cycle_length) % 1.0
+    index = int(fraction * 28) % 28
+    return MOON_WI_ICON_NAMES[index]
+
+
 def get_moon_state(lat: float, lon: float, elevation_m: float = 0.0) -> MoonState:
     obs = _make_observer(lat, lon, elevation_m)
     moon = ephem.Moon(obs)
     moon.compute(obs)
     altitude_deg = math.degrees(float(moon.alt))
     phase_name = _moon_phase_name(datetime.utcnow())
-    return MoonState(altitude_deg=altitude_deg, phase_name=phase_name)
+
+    # Tak samo jak dla Słońca (get_sun_state) - zawsze NAJBLIŻSZY nadchodzący
+    # wschód/zachód, nie "dzisiejszy" (Księżyc wschodzi/zachodzi każdego dnia
+    # ~50 minut później, więc "dzisiejszy wschód" bywa myślące - czasem już
+    # był, czasem wypada dopiero jutro).
+    next_rising = _to_utc_datetime(obs.next_rising(ephem.Moon()))
+    next_setting = _to_utc_datetime(obs.next_setting(ephem.Moon()))
+
+    return MoonState(
+        altitude_deg=altitude_deg,
+        phase_name=phase_name,
+        next_rising=next_rising,
+        next_setting=next_setting,
+    )
